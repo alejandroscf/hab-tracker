@@ -19,6 +19,7 @@
 <body>
     <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span> minutes ago:</h2>
     <h3>Battery: (<span class="voltios"></span> V)</h3>
+    <h3>Data: (<span class="datos"></span>)</h3>
     <canvas id="batteryChart" width="200" height="200"></canvas>
     <canvas id="historyChart" width="400" height="200"></canvas>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
@@ -72,19 +73,29 @@
             //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             $.ajax({
                 //url: "https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json",
-                url: "https://api.aprs.fi/api/get",
-                data: {name: "EA2DVJ-11", what: "loc", apikey: "109984.vUFksEiAq8PAsJQ",format: "json"},
+                url: "/hab-tracker/aprs.php",
+                //data: {name: "EA2DVJ-11", what: "loc", apikey: "109984.vUFksEiAq8PAsJQ",format: "json"},
                 type: "GET",
                 dataType: "json",
-                success: dibuja(data),
                 beforeSend: function(request) {
                     request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
                 },
+                success: function (foo) {
+		    $("#distintivo").text("EA2DVJ-11");
+		    //console.log(foo);
+                    $fecha = new Date();
+		    $fecha.setTime(foo.entries[0].lasttime);
+		    $("#tiempo").text($fecha);
+		    $(".datos").text(foo.entries[0].comment);
+		    $lat = foo.entries[0].lat;
+		    $lng = foo.entries[0].lng;
+		    var OpenCellMarker = L.marker([$lat, $lng]).addTo(map);
+		    map.setView(new L.LatLng($lat, $lng));
+			
+		},
             });
         };
-        function dibuja(data) {
-            $("#distintivo").text("EA2DVJ-11");
-            //console.log(data);
+        function dibuja(foo) {
             
         }
 
