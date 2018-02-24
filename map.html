@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="leaflet/leaflet.css" />
     <script type="text/javascript" src="leaflet/leaflet.js"></script>
     <script type="text/javascript" src="leafletembed.js"></script>
-    <script type="text/javascript" src="leaflet-omnivore/leaflet-omnivore.min.js"></script>
+    <!--<script type="text/javascript" src="leaflet-omnivore/leaflet-omnivore.min.js"></script>-->
+    <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
     <script type="text/javascript" src="Chart.js/Chart.js"></script>
     <script type="text/javascript" src="Chart.Scatter/Chart.Scatter.js"></script>
     <script
@@ -23,11 +24,13 @@
     <canvas id="batteryChart" width="200" height="200"></canvas>
     <canvas id="historyChart" width="400" height="200"></canvas>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
+    <input type="button" onclick="encuentrame()" value="Encuentrame" ></input>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
     <div id="map" style="width: 500px; height: 600px"></div>
     <br/>
     <small><!--<a href="">View Larger Map</a>--></small>
         <script>
+            var position;
             recarga();
             initmap();
              map.setView(new L.LatLng(40, 0),17); 
@@ -90,15 +93,54 @@
 		    $lat = foo.entries[0].lat;
 		    $lng = foo.entries[0].lng;
 		    var OpenCellMarker = L.marker([$lat, $lng]).addTo(map);
-		    map.setView(new L.LatLng($lat, $lng));
-			
+		    //map.setView(new L.LatLng($lat, $lng));
+
+		    //encuentrame();
+		    navigator.geolocation.getCurrentPosition(
+			function (pos) {
+			    postion = pos;
+			    console.log(pos);
+		            var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
+		            var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
+		            var point1 = "" + pos.coords.latitude + "," + pos.coords.longitude;
+			    var point2 = "" + $lat + "," + $lng ;
+		    	    var marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
+		    	    map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
+                            console.log(coor);
+			    $.ajax({
+				//osrm (osm)
+				//url: "https://router.project-osrm.org/route/v1/driving/" + coor,
+				//data: {overview: "false", geometries: "polyline", steps: "true"},
+				//osrm (api)
+				//url: "https://api.openrouteservice.org/directions",
+				//data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
+				//profile: "foot-hiking"
+				url: "https://graphhopper.com/api/1/route?point="+ point1,
+				data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
+				type: "GET",
+				success: function (foo) {
+				    console.log(foo);
+				    omnivore.gpx.parse(foo).addTo(map);
+				},
+			    });
+			}
+		    );
+		    //llevame(position, $lat, $lng);
+		    
 		},
             });
         };
         function dibuja(foo) {
             
-        }
+        };
 
+	function encuentrame() {
+	};
+
+        function llevame(mypos, lat, lon) {
+	    //coor = "" + mypos.getLatitude "," + mypos.getLongitude + "|" + lat + "," + lon;
+	    
+        };
 
 
         </script>
