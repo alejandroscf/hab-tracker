@@ -18,22 +18,30 @@
 
 </head>
 <body>
-    <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span> minutes ago:</h2>
-    <h3>Battery: (<span class="voltios"></span> V)</h3>
-    <h3>Data: (<span class="datos"></span>)</h3>
+    <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span>:</h2>
+    <h4>Battery: (<span class="voltios"></span> V)</h3>
+    <h4>Data: (<span class="datos"></span>)</h3>
     <canvas id="batteryChart" width="200" height="200"></canvas>
     <canvas id="historyChart" width="400" height="200"></canvas>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
-    <input type="button" onclick="encuentrame()" value="Encuentrame" ></input>
+    <input type="button" onclick="simula()" value="Simula" ></input>
+    <input type="button" onclick="llevame(globo_position)" value="Llevame globo" ></input>
+    <input id="button_llevame_meta" disabled="true" type="button" onclick="llevame(finish_position)" value="Llevame meta" ></input>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
-    <div id="map" style="width: 500px; height: 600px"></div>
+    <div id="map" style=" height: 600px"></div>
     <br/>
     <small><!--<a href="">View Larger Map</a>--></small>
         <script>
-            var position;
+            var my_position;
+            var globo_position;
+            var finish_position;
+            var track;
+            var asc_poly, des_poly;
+            var globo_marker, my_marker;
             recarga();
+            //simula();
             initmap();
-             map.setView(new L.LatLng(40, 0),17); 
+             //map.setView(new L.LatLng(40, 0),17); 
             //omnivore.gpx('s2g.php?file=tmplocation.log').addTo(map);
 
             // Charts.js
@@ -76,7 +84,7 @@
             //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             $.ajax({
                 //url: "https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json",
-                url: "/hab-tracker/aprs.php",
+                url: "aprs.php",
                 //data: {name: "EA2DVJ-11", what: "loc", apikey: "109984.vUFksEiAq8PAsJQ",format: "json"},
                 type: "GET",
                 dataType: "json",
@@ -84,63 +92,98 @@
                     request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
                 },
                 success: function (foo) {
-		    $("#distintivo").text("EA2DVJ-11");
-		    //console.log(foo);
-                    $fecha = new Date();
-		    $fecha.setTime(foo.entries[0].lasttime);
-		    $("#tiempo").text($fecha);
-		    $(".datos").text(foo.entries[0].comment);
-		    $lat = foo.entries[0].lat;
-		    $lng = foo.entries[0].lng;
-		    var OpenCellMarker = L.marker([$lat, $lng]).addTo(map);
-		    //map.setView(new L.LatLng($lat, $lng));
+                   $("#distintivo").text("EA2DVJ-11");
+                   //console.log(foo);
+                   $fecha = new Date();
+                   $fecha.setTime(foo.entries[0].lasttime*1000);
+                   //console.log(foo.entries[0].lasttime);
+                   //console.log(foo.entries[0].time);
+                   //console.log($fecha);
+                   $("#tiempo").text($fecha);
+                   $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
+                   $lat = foo.entries[0].lat;
+                   $lng = foo.entries[0].lng;
+                   globo_position = [foo.entries[0].lat, foo.entries[0].lng]
+                   var globoIcon = new L.Icon({iconUrl: 'globo.png'});
+                   globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
+                   map.setView(new L.LatLng($lat, $lng));
 
-		    //encuentrame();
-		    navigator.geolocation.getCurrentPosition(
-			function (pos) {
-			    postion = pos;
-			    console.log(pos);
-		            var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
-		            var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
-		            var point1 = "" + pos.coords.latitude + "," + pos.coords.longitude;
-			    var point2 = "" + $lat + "," + $lng ;
-		    	    var marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
-		    	    map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
-                            console.log(coor);
-			    $.ajax({
-				//osrm (osm)
-				//url: "https://router.project-osrm.org/route/v1/driving/" + coor,
-				//data: {overview: "false", geometries: "polyline", steps: "true"},
-				//osrm (api)
-				//url: "https://api.openrouteservice.org/directions",
-				//data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
-				//profile: "foot-hiking"
-				url: "https://graphhopper.com/api/1/route?point="+ point1,
-				data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
-				type: "GET",
-				success: function (foo) {
-				    console.log(foo);
-				    omnivore.gpx.parse(foo).addTo(map);
-				},
-			    });
-			}
-		    );
-		    //llevame(position, $lat, $lng);
-		    
-		},
+                   //encuentrame();
+                   navigator.geolocation.getCurrentPosition(
+                      function (pos) {
+                         my_position = [pos.coords.latitude, pos.coords.longitude];
+                         //console.log(pos);
+                         var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
+                         var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
+                         my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
+                         //map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
+                         //console.log(coor);
+                      }
+                   );
+               },
             });
         };
-        function dibuja(foo) {
-            
-        };
+        function llevame (dest) {
+          try { map.removeLayer(track); } catch (error) {};
+          var point1 = "" + my_position[0] + "," + my_position[1];
+          var point2 = "" + dest[0] + "," + dest[1] ;
+          $.ajax({
+             //osrm (osm)
+             //url: "https://router.project-osrm.org/route/v1/driving/" + coor,
+             //data: {overview: "false", geometries: "polyline", steps: "true"},
+             //osrm (api)
+             //url: "https://api.openrouteservice.org/directions",
+             //data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
+             //profile: "foot-hiking"
+             url: "https://graphhopper.com/api/1/route?point="+ point1,
+             data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
+             type: "GET",
+             success: function (gpx_track) {
+                console.log(gpx_track);
+                track = omnivore.gpx.parse(gpx_track).addTo(map);
+                //map.fitBounds(track.getBounds());
+             },
+          });
+        }
 
-	function encuentrame() {
+   function wrapLng(lng) {
+      if (lng < 0) { lng = lng + 360 };
+      return lng;
+   }
+   function unWrapLng(lng) {
+      if (lng > 180) { lng = lng - 360 };
+      return lng;
+   }
+	function simula() {
+      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
+      $fecha_sim = new Date().toISOString();
+      $.getJSON( 
+         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+$lat+"&launch_longitude="+wrapLng($lng)+"&launch_datetime="+$fecha_sim+"&ascent_rate=7.49&descent_rate=8&burst_altitude=32000", 
+         function ( data ) { 
+            //console.log(data);
+            var asc_points = data.prediction[0].trajectory.map(function(x) {
+               return [x.latitude,unWrapLng(x.longitude)];
+            });
+            asc_poly = L.polyline(asc_points, {color: 'green'}).addTo(map);
+            //map.fitBounds(asc_poly.getBounds());
+            //console.log(asc_poly);
+            var des_points = data.prediction[1].trajectory.map(function(x) {
+               return [x.latitude,unWrapLng(x.longitude)];
+            });
+            //console.log(des_points);
+            des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
+            map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
+            //map.setView(new L.LatLng(41.6633,-0.8250),12);
+            //console.log(des_poly);
+            //console.log(des_points[des_points.length - 1]);
+            finish_position = des_points[des_points.length - 1];
+            var finish_marker = L.marker(finish_position).addTo(map);
+            //console.log(globo_position);
+            $("#button_llevame_meta").prop('disabled', false);
+         }
+      );
 	};
 
-        function llevame(mypos, lat, lon) {
-	    //coor = "" + mypos.getLatitude "," + mypos.getLongitude + "|" + lat + "," + lon;
-	    
-        };
 
 
         </script>
