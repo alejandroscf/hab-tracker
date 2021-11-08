@@ -10,6 +10,7 @@
     <!--<script type="text/javascript" src="leaflet-omnivore/leaflet-omnivore.min.js"></script>-->
     <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
     <script type="text/javascript" src="Chart.js/Chart.js"></script>
+    <!--<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.6.0/chart.min.js"></script>-->
     <script type="text/javascript" src="Chart.Scatter/Chart.Scatter.js"></script>
     <script
               src="https://code.jquery.com/jquery-3.3.1.min.js"
@@ -19,17 +20,21 @@
 </head>
 <body>
     <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span>:</h2>
-    <h4>Battery: (<span class="voltios"></span> V)</h3>
-    <h4>Data: (<span class="datos"></span>)</h3>
-    <canvas id="batteryChart" width="200" height="200"></canvas>
-    <canvas id="historyChart" width="400" height="200"></canvas>
+    <h4>Battery: (<span class="voltios"></span> V)</h4>
+    <h4>Data: (<span class="datos"></span>)</h4>
+    <h4>Globo: (<a class="globo"></a>)</h4>
+    <h4>Meta: (<a class="meta"></a>)</h4>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
-    <input type="button" onclick="simula()" value="Simula" ></input>
+    <input type="button" onclick="simula(globo_position)" value="Simula online" ></input>
+    <input type="button" onclick="simula_caida(globo_position)" value="Simula caida" ></input>
+    <!--<input type="button" onclick="simula_inicial([42.0408,-0.5762])" value="Simula Almudevar" ></input>-->
     <input type="button" onclick="llevame(globo_position)" value="Llevame globo" ></input>
     <input id="button_llevame_meta" disabled="true" type="button" onclick="llevame(finish_position)" value="Llevame meta" ></input>
+    <br/>
+    <canvas id="batteryChart" width="200" height="200"></canvas>
+    <canvas id="historyChart" height="200"></canvas>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
     <div id="map" style=" height: 600px"></div>
-    <br/>
     <small><!--<a href="">View Larger Map</a>--></small>
         <script>
             var my_position;
@@ -37,9 +42,10 @@
             var finish_position;
             var track;
             var asc_poly, des_poly;
-            var globo_marker, my_marker;
+            var globo_marker, my_marker, finish_marker;
             recarga();
             //simula();
+            simula_inicial([42.0408,-0.5762]);
             initmap();
              //map.setView(new L.LatLng(40, 0),17); 
             //omnivore.gpx('s2g.php?file=tmplocation.log').addTo(map);
@@ -64,7 +70,7 @@
             
             var historyCtx = document.getElementById("historyChart").getContext("2d");
             var historyData = [{
-                label: 'Battery level',
+                label: 'Simulacion Inicial',
                 strokeColor: '#F16220',
                 pointColor: '#F16220',
                 pointStrokeColor: '#fff',
@@ -79,7 +85,7 @@
                 useUtc: false,
                 animation: false,
             }
-            var historyChart = new Chart(historyCtx).Scatter(historyData,options);
+            //var historyChart = new Chart(historyCtx).Scatter(historyData,options);
         function recarga() {
             //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             $.ajax({
@@ -93,7 +99,7 @@
                 },
                 success: function (foo) {
                    $("#distintivo").text("EA2DVJ-11");
-                   //console.log(foo);
+                   console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
                    //console.log(foo.entries[0].lasttime);
@@ -101,9 +107,12 @@
                    //console.log($fecha);
                    $("#tiempo").text($fecha);
                    $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
+                   url = "https://osmand.net/go?lat="+foo.entries[0].lat+"&lon="+foo.entries[0].lng;
+                   $(".globo").text(url);
+                   $(".globo").attr("href",url);
                    $lat = foo.entries[0].lat;
                    $lng = foo.entries[0].lng;
-                   globo_position = [foo.entries[0].lat, foo.entries[0].lng]
+                   globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude]
                    var globoIcon = new L.Icon({iconUrl: 'globo.png'});
                    globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
                    map.setView(new L.LatLng($lat, $lng));
@@ -147,18 +156,61 @@
         }
 
    function wrapLng(lng) {
-      if (lng < 0) { lng = lng + 360 };
+      if (lng < 0) { lng = parseFloat(lng) + 360 };
       return lng;
    }
    function unWrapLng(lng) {
       if (lng > 180) { lng = lng - 360 };
       return lng;
    }
-	function simula() {
+	function simula_inicial(position) {
+      //try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
+      console.log(wrapLng(position[1]));
+      $fecha_sim = "2021-11-06T11:00:00.000Z";
+      $.getJSON( 
+         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude=35000", 
+         function ( data ) { 
+            console.log(data);
+            var asc_points_init = data.prediction[0].trajectory.map(function(x) {
+               return [x.latitude,unWrapLng(x.longitude)];
+            });
+            asc_poly_init = L.polyline(asc_points_init, {color: 'grey'}).addTo(map);
+            //map.fitBounds(asc_poly.getBounds());
+            //console.log(asc_poly);
+            var des_points_init = data.prediction[1].trajectory.map(function(x) {
+               return [x.latitude,unWrapLng(x.longitude)];
+            });
+            des_poly_init = L.polyline(des_points_init, {color: 'grey'}).addTo(map);
+            map.fitBounds(des_poly_init.getBounds().extend(asc_poly_init.getBounds()));
+            //map.setView(new L.LatLng(41.6633,-0.8250),12);
+            //console.log(des_poly);
+            //console.log(des_points[des_points.length - 1]);
+            finish_position = des_points_init[des_points_init.length - 1];
+            //finish_marker = L.marker(finish_position).addTo(map);
+            //console.log(globo_position);
+            $("#button_llevame_meta").prop('disabled', false);
+            var alti_hist = data.prediction[0].trajectory.concat(data.prediction[1].trajectory).map(function(item) {
+               return { x: new Date(item.datetime).getTime() , y: item.altitude }
+            });
+            //console.log(alti_hist);
+            historyData[0].data = alti_hist; 
+            //console.log(historyData);
+            historyChart = new Chart(historyCtx).Scatter(historyData,options);
+            //historyChart2 = historyChart .Scatter(historyData,options);
+            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
+            $(".meta").text(url);
+            $(".meta").attr("href",url);
+         }
+      );
+
+   }
+	function simula(position) {
       try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
       $fecha_sim = new Date().toISOString();
+      //console.log(position[1]);
+      //console.log(wrapLng(position[1]));
       $.getJSON( 
-         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+$lat+"&launch_longitude="+wrapLng($lng)+"&launch_datetime="+$fecha_sim+"&ascent_rate=7.49&descent_rate=8&burst_altitude=32000", 
+         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude=35000&launch_altitude="+position[2], 
          function ( data ) { 
             //console.log(data);
             var asc_points = data.prediction[0].trajectory.map(function(x) {
@@ -177,12 +229,46 @@
             //console.log(des_poly);
             //console.log(des_points[des_points.length - 1]);
             finish_position = des_points[des_points.length - 1];
-            var finish_marker = L.marker(finish_position).addTo(map);
+            finish_marker = L.marker(finish_position).addTo(map);
             //console.log(globo_position);
+            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
+            $(".meta").text(url);
+            $(".meta").attr("href",url);
             $("#button_llevame_meta").prop('disabled', false);
          }
       );
 	};
+	function simula_caida(position) {
+      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
+      $fecha_sim = new Date().toISOString();
+      console.log(position);
+      //console.log(wrapLng(position[1]));
+      $.getJSON( 
+         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude="+(parseInt(position[2])+1)+"&launch_altitude="+position[2], 
+         function ( data ) { 
+            //console.log(data);
+            //map.fitBounds(asc_poly.getBounds());
+            //console.log(asc_poly);
+            var des_points = data.prediction[1].trajectory.map(function(x) {
+               return [x.latitude,unWrapLng(x.longitude)];
+            });
+            //console.log(des_points);
+            des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
+            map.fitBounds(des_poly.getBounds());
+            //map.setView(new L.LatLng(41.6633,-0.8250),12);
+            //console.log(des_poly);
+            //console.log(des_points[des_points.length - 1]);
+            finish_position = des_points[des_points.length - 1];
+            finish_marker = L.marker(finish_position).addTo(map);
+            //console.log(globo_position);
+            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
+            $(".meta").text(url);
+            $(".meta").attr("href",url);
+            $("#button_llevame_meta").prop('disabled', false);
+         }
+      );
+	};
+
 
 
 
