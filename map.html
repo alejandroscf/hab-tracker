@@ -20,19 +20,53 @@
 </head>
 <body>
     <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span>:</h2>
-    <h4>Battery: (<span class="voltios"></span> V)</h4>
+<!--    <h4>Battery: (<span class="voltios"></span> V)</h4>-->
     <h4>Data: (<span class="datos"></span>)</h4>
     <h4>Globo: (<a class="globo"></a>)</h4>
     <h4>Meta: (<a class="meta"></a>)</h4>
+    <label for="indicativo">Indicativo:</label>
+    <select id="indicativo" onchange="recarga()">
+         <option value="EA2DVJ-11">EA2DVJ-11</option>
+         <option value="EA4GZT-11">EA4GZT-11</option>
+   </select>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
-    <input type="button" onclick="simula(globo_position)" value="Simula online" ></input>
-    <input type="button" onclick="simula_caida(globo_position)" value="Simula caida" ></input>
+    <!--<input type="button" onclick="simula(globo_position)" value="¡Simula ahora!" ></input>-->
+    <label><input type="checkbox" id="bajando" value="bajando" onchange="recarga()">Simula caída</label>
+    <label><input type="checkbox" id="inicial" value="inicial" onchange="recarga()">Simula desde base</label>
+    <!--<input type="button" onclick="simula_caida(globo_position)" value="Simula caida" ></input>-->
     <!--<input type="button" onclick="simula_inicial([42.0408,-0.5762])" value="Simula Almudevar" ></input>-->
-    <input type="button" onclick="llevame(globo_position)" value="Llevame globo" ></input>
-    <input id="button_llevame_meta" disabled="true" type="button" onclick="llevame(finish_position)" value="Llevame meta" ></input>
+    <!--<input type="button" onclick="llevame_dest(globo_position)" value="Llevame globo" ></input>-->
+    <!--<input id="button_llevame_meta" disabled="true" type="button" onclick="llevame_dest(finish_position)" value="Llevame meta" ></input>-->
     <br/>
-    <canvas id="batteryChart" width="200" height="200"></canvas>
-    <canvas id="historyChart" height="200"></canvas>
+    <label for="refresh_interval">Internvalo de actualziación (s)</label><input type="text" id="refresh_interval" name="refresh_interval" size="3" value="10" onchange="set_interval()">
+    <br/>
+    <fieldset>
+         <legend>Destino:</legend>
+
+         <div>
+               <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga()">
+               <label for="dest_nada">No calcular</label>
+         </div>
+         <div>
+               <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga()">
+               <label for="dest_globo">Globo</label>
+         </div>
+         <div>
+               <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga()">
+               <label for="dest_meta">Meta</label>
+         </div>
+    </fieldset>
+    <br/>
+    <label for="ascent_rate">Velocidad de ascenso</label><input type="text" id="ascent_rate" name="ascent_rate" size="10" value="5.97"> 
+    <label for="burst_alt">Altura máxima</label><input type="text" id="burst_alt" name="burst_alt" size="10" value="33000"> 
+    <label for="descent_rate">Velocidad de descenso</label><input type="text" id="descent_rate" name="descent_rate" size="10" value="5"> 
+    <canvas height="30"></canvas>
+    <br/>
+    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.8342"> 
+    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-0.7645"> 
+    <label for="alt_ini">Altitud inicial</label><input type="text" id="alt_ini" name="alt_ini" size="5" value="200"> 
+    <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2022-05-14T11:00:00.000Z"> 
+    <canvas id="historyChart" height="30"></canvas>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
     <div id="map" style=" height: 600px"></div>
     <small><!--<a href="">View Larger Map</a>--></small>
@@ -43,62 +77,34 @@
             var track;
             var asc_poly, des_poly;
             var globo_marker, my_marker, finish_marker;
+            var refresh_interval_id;
             recarga();
             //simula();
-            simula_inicial([42.0408,-0.5762]);
+            //simula_inicial([42.0408,-0.5762]);
             initmap();
              //map.setView(new L.LatLng(40, 0),17); 
             //omnivore.gpx('s2g.php?file=tmplocation.log').addTo(map);
+            refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
 
-            // Charts.js
-            var batteryCtx = document.getElementById("batteryChart").getContext("2d");
-            var data = [
-                {
-                    value: "0",
-                    color: "rgba(0,0,220,0.8)",
-                    highlight: "rgba(0,0,220,1)",
-                    label: "Charge",
-                },
-                {
-                    value: 0,
-                    color: "rgba(0,0,0,0)",
-                    highlight: "rgba(0,0,0,0)",
-                    label: "Empty",
-                }
-            ]
-            var batteryChart = new Chart(batteryCtx).Pie(data, {showScale: true});
-            
-            var historyCtx = document.getElementById("historyChart").getContext("2d");
-            var historyData = [{
-                label: 'Simulacion Inicial',
-                strokeColor: '#F16220',
-                pointColor: '#F16220',
-                pointStrokeColor: '#fff',
-                data: [
-                                ]
-            },
-            ];
-            options = {
-                pointDot: false,
-                bezierCurve: false,
-                scaleType: "date",
-                useUtc: false,
-                animation: false,
+        function set_interval() {
+            if (refresh_interval_id !== undefined) {
+               clearInterval(refresh_interval_id);
             }
-            //var historyChart = new Chart(historyCtx).Scatter(historyData,options);
+            refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
+        }
+            
+
         function recarga() {
             //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             $.ajax({
-                //url: "https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json",
-                url: "aprs.php",
-                //data: {name: "EA2DVJ-11", what: "loc", apikey: "109984.vUFksEiAq8PAsJQ",format: "json"},
+                url: "aprs.php?indicativo=" + $("#indicativo").val(),
                 type: "GET",
                 dataType: "json",
                 beforeSend: function(request) {
                     request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
                 },
                 success: function (foo) {
-                   $("#distintivo").text("EA2DVJ-11");
+                   $("#distintivo").text($("#indicativo").val());
                    console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
@@ -116,6 +122,7 @@
                    var globoIcon = new L.Icon({iconUrl: 'globo.png'});
                    globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
                    map.setView(new L.LatLng($lat, $lng));
+                   simula(globo_position);
 
                    //encuentrame();
                    navigator.geolocation.getCurrentPosition(
@@ -129,30 +136,41 @@
                          //console.log(coor);
                       }
                    );
+                   llevame();
                },
             });
         };
-        function llevame (dest) {
-          try { map.removeLayer(track); } catch (error) {};
-          var point1 = "" + my_position[0] + "," + my_position[1];
-          var point2 = "" + dest[0] + "," + dest[1] ;
-          $.ajax({
-             //osrm (osm)
-             //url: "https://router.project-osrm.org/route/v1/driving/" + coor,
-             //data: {overview: "false", geometries: "polyline", steps: "true"},
-             //osrm (api)
-             //url: "https://api.openrouteservice.org/directions",
-             //data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
-             //profile: "foot-hiking"
-             url: "https://graphhopper.com/api/1/route?point="+ point1,
-             data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
-             type: "GET",
-             success: function (gpx_track) {
-                console.log(gpx_track);
-                track = omnivore.gpx.parse(gpx_track).addTo(map);
-                //map.fitBounds(track.getBounds());
-             },
-          });
+        function llevame () {
+          if ( $("input[name=destino]:checked").val() == 'dest_globo' ){
+             llevame_dest(globo_position);
+          } else if ( $("input[name=destino]:checked").val() == 'dest_meta' ){
+             llevame_dest(finish_position);
+          }
+        }
+
+        function llevame_dest (dest) {
+          if (my_position !== undefined) {
+             try { map.removeLayer(track); } catch (error) {};
+             var point1 = "" + my_position[0] + "," + my_position[1];
+             var point2 = "" + dest[0] + "," + dest[1] ;
+             $.ajax({
+                //osrm (osm)
+                //url: "https://router.project-osrm.org/route/v1/driving/" + coor,
+                //data: {overview: "false", geometries: "polyline", steps: "true"},
+                //osrm (api)
+                //url: "https://api.openrouteservice.org/directions",
+                //data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
+                //profile: "foot-hiking"
+                url: "https://graphhopper.com/api/1/route?point="+ point1,
+                data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
+                type: "GET",
+                success: function (gpx_track) {
+                   console.log(gpx_track);
+                   track = omnivore.gpx.parse(gpx_track).addTo(map);
+                   //map.fitBounds(track.getBounds());
+                },
+             });
+          }
         }
 
    function wrapLng(lng) {
@@ -163,54 +181,25 @@
       if (lng > 180) { lng = lng - 360 };
       return lng;
    }
-	function simula_inicial(position) {
-      //try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
-      console.log(wrapLng(position[1]));
-      $fecha_sim = "2021-11-06T11:00:00.000Z";
-      $.getJSON( 
-         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude=35000", 
-         function ( data ) { 
-            console.log(data);
-            var asc_points_init = data.prediction[0].trajectory.map(function(x) {
-               return [x.latitude,unWrapLng(x.longitude)];
-            });
-            asc_poly_init = L.polyline(asc_points_init, {color: 'grey'}).addTo(map);
-            //map.fitBounds(asc_poly.getBounds());
-            //console.log(asc_poly);
-            var des_points_init = data.prediction[1].trajectory.map(function(x) {
-               return [x.latitude,unWrapLng(x.longitude)];
-            });
-            des_poly_init = L.polyline(des_points_init, {color: 'grey'}).addTo(map);
-            map.fitBounds(des_poly_init.getBounds().extend(asc_poly_init.getBounds()));
-            //map.setView(new L.LatLng(41.6633,-0.8250),12);
-            //console.log(des_poly);
-            //console.log(des_points[des_points.length - 1]);
-            finish_position = des_points_init[des_points_init.length - 1];
-            //finish_marker = L.marker(finish_position).addTo(map);
-            //console.log(globo_position);
-            $("#button_llevame_meta").prop('disabled', false);
-            var alti_hist = data.prediction[0].trajectory.concat(data.prediction[1].trajectory).map(function(item) {
-               return { x: new Date(item.datetime).getTime() , y: item.altitude }
-            });
-            //console.log(alti_hist);
-            historyData[0].data = alti_hist; 
-            //console.log(historyData);
-            historyChart = new Chart(historyCtx).Scatter(historyData,options);
-            //historyChart2 = historyChart .Scatter(historyData,options);
-            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
-            $(".meta").text(url);
-            $(".meta").attr("href",url);
-         }
-      );
-
-   }
 	function simula(position) {
-      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
       $fecha_sim = new Date().toISOString();
+      $ascent_rate = $("#ascent_rate").val();
+      $descent_rate = $("#descent_rate").val();
+      $burst_alt = $("#burst_alt").val();
+      if ( $("#inicial").prop('checked') ) {
+         position[0] = $("#lat_ini").val();
+         position[1] = $("#lon_ini").val();
+         position[2] = $("#alt_ini").val();
+         $fecha_sim = $("#fecha_ini").val();
+      } else if ( $("#bajando").prop('checked') ) {
+         $burst_alt = (parseInt(position[2])+1)
+      }
+      $url = "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
+      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
       //console.log(position[1]);
       //console.log(wrapLng(position[1]));
       $.getJSON( 
-         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude=35000&launch_altitude="+position[2], 
+         $url,
          function ( data ) { 
             //console.log(data);
             var asc_points = data.prediction[0].trajectory.map(function(x) {
@@ -238,38 +227,6 @@
          }
       );
 	};
-	function simula_caida(position) {
-      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
-      $fecha_sim = new Date().toISOString();
-      console.log(position);
-      //console.log(wrapLng(position[1]));
-      $.getJSON( 
-         "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate=5.38&descent_rate=3.5&burst_altitude="+(parseInt(position[2])+1)+"&launch_altitude="+position[2], 
-         function ( data ) { 
-            //console.log(data);
-            //map.fitBounds(asc_poly.getBounds());
-            //console.log(asc_poly);
-            var des_points = data.prediction[1].trajectory.map(function(x) {
-               return [x.latitude,unWrapLng(x.longitude)];
-            });
-            //console.log(des_points);
-            des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
-            map.fitBounds(des_poly.getBounds());
-            //map.setView(new L.LatLng(41.6633,-0.8250),12);
-            //console.log(des_poly);
-            //console.log(des_points[des_points.length - 1]);
-            finish_position = des_points[des_points.length - 1];
-            finish_marker = L.marker(finish_position).addTo(map);
-            //console.log(globo_position);
-            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
-            $(".meta").text(url);
-            $(".meta").attr("href",url);
-            $("#button_llevame_meta").prop('disabled', false);
-         }
-      );
-	};
-
-
 
 
         </script>
