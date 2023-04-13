@@ -38,7 +38,7 @@
     <!--<input type="button" onclick="llevame_dest(globo_position)" value="Llevame globo" ></input>-->
     <!--<input id="button_llevame_meta" disabled="true" type="button" onclick="llevame_dest(finish_position)" value="Llevame meta" ></input>-->
     <br/>
-    <label for="refresh_interval">Internvalo de actualziación (s)</label><input type="text" id="refresh_interval" name="refresh_interval" size="3" value="10" onchange="set_interval()">
+    <label for="refresh_interval">Internvalo de actualziación (s)</label><input type="text" id="refresh_interval" name="refresh_interval" size="3" value="30" onchange="set_interval()">
     <br/>
     <fieldset>
          <legend>Destino:</legend>
@@ -57,15 +57,15 @@
          </div>
     </fieldset>
     <br/>
-    <label for="ascent_rate">Velocidad de ascenso</label><input type="text" id="ascent_rate" name="ascent_rate" size="10" value="5.97"> 
-    <label for="burst_alt">Altura máxima</label><input type="text" id="burst_alt" name="burst_alt" size="10" value="33000"> 
+    <label for="ascent_rate">Velocidad de ascenso</label><input type="text" id="ascent_rate" name="ascent_rate" size="10" value="7.59"> 
+    <label for="burst_alt">Altura máxima</label><input type="text" id="burst_alt" name="burst_alt" size="10" value="31500"> 
     <label for="descent_rate">Velocidad de descenso</label><input type="text" id="descent_rate" name="descent_rate" size="10" value="5"> 
     <canvas height="30"></canvas>
     <br/>
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.8342"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-0.7645"> 
-    <label for="alt_ini">Altitud inicial</label><input type="text" id="alt_ini" name="alt_ini" size="5" value="200"> 
-    <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2022-05-14T11:00:00.000Z"> 
+    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="42.11440"> 
+    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.14107"> 
+    <label for="alt_ini">Altitud inicial</label><input type="text" id="alt_ini" name="alt_ini" size="5" value="330"> 
+    <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2023-04-15T11:00:00.000Z"> 
     <canvas id="historyChart" height="30"></canvas>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
     <div id="map" style=" height: 600px"></div>
@@ -194,7 +194,7 @@
       } else if ( $("#bajando").prop('checked') ) {
          $burst_alt = (parseInt(position[2])+1)
       }
-      $url = "https://predict.cusf.co.uk/api/v1/?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
+      $url = "https://api.v2.sondehub.org/tawhiri?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
       try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
       //console.log(position[1]);
       //console.log(wrapLng(position[1]));
