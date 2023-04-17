@@ -1,9 +1,0 @@
-[submodule "leaflet-omnivore"]
-	path = leaflet-omnivore
-	url = https://github.com/mapbox/leaflet-omnivore
-[submodule "Chart.js"]
-	path = Chart.js
-	url = https://github.com/nnnick/Chart.js
-[submodule "Chart.Scatter"]
-	path = Chart.Scatter
-	url = https://github.com/dima117/Chart.Scatter
