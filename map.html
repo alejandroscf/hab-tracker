@@ -109,6 +109,11 @@
             //simula();
             //simula_inicial([42.0408,-0.5762]);
             initmap();
+            
+            /* Rectángulo límites */
+            var bounds = [[41.616260,-0.249983], [40.871279,-1.381347]];
+            L.rectangle(bounds, {fill:false,color: "#ff7800", weight: 2}).addTo(map);
+
              //map.setView(new L.LatLng(40, 0),17); 
             //omnivore.gpx('s2g.php?file=tmplocation.log').addTo(map);
             refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
