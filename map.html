@@ -16,10 +16,12 @@
               src="https://code.jquery.com/jquery-3.3.1.min.js"
               integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
               crossorigin="anonymous"></script>
+    <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
+    <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
 
 </head>
 <body>
-    <h2><span id="distintivo"></span>'s status as of <span id="tiempo"></span>:</h2>
+    <h2><span class="distintivo"></span>'s status as of <span class="tiempo"></span>:</h2>
 <!--    <h4>Battery: (<span class="voltios"></span> V)</h4>-->
     <h4>Data: (<span class="datos"></span>)</h4>
     <h4>Globo: (<a class="globo"></a>)</h4>
@@ -95,7 +97,7 @@
     <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2024-04-27T09:00:00.000Z"> 
     <canvas id="historyChart" height="30"></canvas>
     <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
-    <div id="map" style=" height: 600px"></div>
+    <div id="map" style=" height: 70%"></div>
     <small><!--<a href="">View Larger Map</a>--></small>
         <script>
             var my_position;
@@ -110,8 +112,26 @@
             //simula_inicial([42.0408,-0.5762]);
             initmap();
             
+            map.addControl(new L.Control.Fullscreen());
+
+				L.Control.textbox = L.Control.extend({
+						onAdd: function(map) {
+							
+						var text = L.DomUtil.create('div');
+						text.id = "info_text";
+						text.innerHTML = '<h2><span class="distintivo"></span>: <span class="tiempo"></span></h2><h3>Data: (<span class="datos"></span>)</h3>'
+						return text;
+						},
+
+						onRemove: function(map) {
+							// Nothing to do here
+						}
+					});
+					L.control.textbox = function(opts) { return new L.Control.textbox(opts);}
+					L.control.textbox({ position: 'bottomleft' }).addTo(map);
+
             /* Rectángulo límites */
-            var bounds = [[41.297289,-0.460808], [40.871279,-1.381347]];
+            var bounds = [[41.48937,-0.53218], [40.871279,-1.381347]];
             L.rectangle(bounds, {fill:false,color: "#ff7800", weight: 2}).addTo(map);
 
              //map.setView(new L.LatLng(40, 0),17); 
@@ -136,14 +156,14 @@
                     request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
                 },
                 success: function (foo) {
-                   $("#distintivo").text($("#indicativo").val());
+                   $(".distintivo").text($("#indicativo").val());
                    console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
                    //console.log(foo.entries[0].lasttime);
                    //console.log(foo.entries[0].time);
                    //console.log($fecha);
-                   $("#tiempo").text($fecha);
+                   $(".tiempo").text($fecha.toLocaleString('en-GB'));
                    $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
                    url = "https://osmand.net/go?lat="+foo.entries[0].lat+"&lon="+foo.entries[0].lng;
                    $(".globo").text(url);
