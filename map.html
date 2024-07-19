@@ -177,9 +177,9 @@
                 url: "aprs.php?indicativo=" + $("#indicativo").val(),
                 type: "GET",
                 dataType: "json",
-                beforeSend: function(request) {
-                    request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
-                },
+                //beforeSend: function(request) {
+                //    request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
+                //},
                 success: function (foo) {
                    $(".distintivo").text($("#indicativo").val());
                    //console.log(foo);
