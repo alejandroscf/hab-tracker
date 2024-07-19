@@ -243,7 +243,7 @@
          position[1] = $("#lon_ini").val();
          position[2] = $("#alt_ini").val();
          $fecha_sim = $("#fecha_ini").val();
-      } else if ( $("#bajando").prop('checked') ) {
+      } else if ( $("#bajando").prop('checked') || parseInt(position[2]) > parseInt($burst_alt) ) {
          $burst_alt = (parseInt(position[2])+1)
       }
       $url = "https://api.v2.sondehub.org/tawhiri?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
