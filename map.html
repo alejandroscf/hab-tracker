@@ -114,21 +114,27 @@
             
             map.addControl(new L.Control.Fullscreen());
 
-				L.Control.textbox = L.Control.extend({
-						onAdd: function(map) {
+				let textbox_payload = L.Control.extend({
+						onAdd: function() {
 							
 						var text = L.DomUtil.create('div');
 						text.id = "info_text";
 						text.innerHTML = '<h2><span class="distintivo"></span>: <span class="tiempo"></span></h2><h3>Data: (<span class="datos"></span>)</h3>'
 						return text;
 						},
+            });
+            new textbox_payload({ position: 'bottomleft' }).addTo(map);
 
-						onRemove: function(map) {
-							// Nothing to do here
-						}
-					});
-					L.control.textbox = function(opts) { return new L.Control.textbox(opts);}
-					L.control.textbox({ position: 'bottomleft' }).addTo(map);
+				let textbox_eta = L.Control.extend({
+						onAdd: function() {
+							
+						var text = L.DomUtil.create('div');
+						text.id = "info_text";
+						text.innerHTML = '<h2>Llegada:</h2><h3>Globo: <span class="eta_globo"></span></h3><h3>Coche: <span class="eta_coche"></span></h3>'
+						return text;
+						},
+            });
+            new textbox_eta({ position: 'topright' }).addTo(map);
 
             /* Rectángulo límites */
             var bounds = [[41.48937,-0.53218], [40.871279,-1.381347]];
@@ -145,9 +151,28 @@
             refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
         }
             
+        function millis2time(diff) {
+           let ms = diff % 1000;
+           let ss = Math.floor(diff / 1000) % 60;
+           let mm = Math.floor(diff / 1000 / 60) % 60;
+           let hh = Math.floor(diff / 1000 / 60 / 60);
+           return "" + hh + ":" + mm;
+        }
+            
 
         function recarga() {
             //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
+            let encuentrame = navigator.geolocation.getCurrentPosition((pos) => {
+                //encuentrame();
+                my_position = [pos.coords.latitude, pos.coords.longitude];
+                //console.log(pos);
+                var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
+                var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
+                my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
+                //map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
+                //console.log(coor);
+                llevame();
+            });
             $.ajax({
                 url: "aprs.php?indicativo=" + $("#indicativo").val(),
                 type: "GET",
@@ -157,7 +182,7 @@
                 },
                 success: function (foo) {
                    $(".distintivo").text($("#indicativo").val());
-                   console.log(foo);
+                   //console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
                    //console.log(foo.entries[0].lasttime);
@@ -176,19 +201,7 @@
                    map.setView(new L.LatLng($lat, $lng));
                    simula(globo_position);
 
-                   //encuentrame();
-                   navigator.geolocation.getCurrentPosition(
-                      function (pos) {
-                         my_position = [pos.coords.latitude, pos.coords.longitude];
-                         //console.log(pos);
-                         var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
-                         var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
-                         my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
-                         //map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
-                         //console.log(coor);
-                      }
-                   );
-                   llevame();
+
                },
             });
         };
@@ -215,13 +228,35 @@
                 //profile: "foot-hiking"
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
                 data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
+                //data: {point: point2, key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
                 type: "GET",
                 success: function (gpx_track) {
-                   console.log(gpx_track);
-                   track = omnivore.gpx.parse(gpx_track).addTo(map);
+                   //console.log(gpx_track);
+                   track = omnivore.gpx.parse(gpx_track)
+                   //console.log(track);
+                   track.addTo(map);
+                   track.eachLayer(function(layer){
+                      if (layer.feature && layer.feature.properties && layer.feature.properties.coordTimes) {
+                         //console.log(layer.feature.properties.coordTimes);
+                         first_point_c = layer.feature.properties.coordTimes.at(0);
+                         last_point_c = layer.feature.properties.coordTimes.at(-1);
+                         let first_date_c = new Date(first_point_c);
+                         let last_date_c = new Date(last_point_c);
+                         //console.log(first_date_c);
+                         //console.log(last_date_c);
+                         eta_coche = millis2time(last_date_c - first_date_c);
+                         if ( $("input[name=destino]:checked").val() == 'dest_meta' ) {
+                            $('.eta_coche').text(eta_coche)
+                         } else {
+                            $('.eta_coche').text(eta_coche + " a globo")
+                         }
+                      }
+                   });
                    //map.fitBounds(track.getBounds());
                 },
              });
+          } else {
+             console.log("Location not available");
           }
         }
 
@@ -264,6 +299,13 @@
                return [x.latitude,unWrapLng(x.longitude)];
             });
             //console.log(des_points);
+            first_point = data.prediction[0].trajectory.at(0);
+            last_point = data.prediction[1].trajectory.at(-1);
+            let first_date = new Date(first_point.datetime);
+            let last_date = new Date(last_point.datetime);
+            //console.log(first_date);
+            //console.log(last_date);
+            eta_globo = millis2time(last_date - first_date);
             des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
             map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
             //map.setView(new L.LatLng(41.6633,-0.8250),12);
@@ -271,11 +313,13 @@
             //console.log(des_points[des_points.length - 1]);
             finish_position = des_points[des_points.length - 1];
             finish_marker = L.marker(finish_position).addTo(map);
+            //finish_marker.bindPopup("Llegada:<br\>Globo:<br\>Coche:").openPopup();
             //console.log(globo_position);
             url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
             $(".meta").text(url);
             $(".meta").attr("href",url);
             $("#button_llevame_meta").prop('disabled', false);
+            $(".eta_globo").text(eta_globo);
          }
       );
 	};
