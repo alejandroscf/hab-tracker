@@ -1,37 +1,5 @@
 <?php
-    global $secretKey;
-    global $workingDirectory;
-    global $fileName;
-    global $filePath;
-    global $logName;
-    global $logPath;
-    global $gpxDirectory;
-    global $name;
-    global $zoom;
-    global $accuracy;
-    global $height;
-    global $width;
-    #Change this! Just to prevent random people from being able to change your displayed location
-    $secretKey = 'CHANGE ME!';
-    # API key of OpenCellId
-    $OpenCellIDkey = 'CHANGE ME!';
-    # API key of Mozilla Location Service
-    $MSLkey = 'CHANGE ME!';
-
-    #used to round the lat/lon values so you aren't sharing your *exact* location
-    $accuracy = 9; 
-    $workingDirectory = './';
-    $fileName = 'location';
-    $filePath = $fileDirectory . $fileName;
-    $logName = $fileName . ".log";
-    $logPath = $workingDirectory . $logName;
-    $gpxDirectory = $workingDirectory . 'gpx/';
-
-    # Display options
-
-    $name = 'Toby';
-    #how far to zoom in on the map
-    $zoom = "15";
-    $height = "500";
-    $width = "600";
+    global $AprsFiKey;
+    # API key of APRS.FI
+    $AprsFiKey = 'CHANGE ME!';
 ?>
