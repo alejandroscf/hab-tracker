@@ -301,12 +301,13 @@
 
         map.addControl(new L.Control.Fullscreen());
 
-        L.control.locate({
+        var lc = L.control.locate({
             position: 'topleft',
             flyTo: false,
             keepCurrentZoomLevel: true,
             strings: { title: 'Seguir mi posición' }
         }).addTo(map);
+        lc.start();
 
         map.on('locationfound', function(e) {
             my_position = [e.latlng.lat, e.latlng.lng];
