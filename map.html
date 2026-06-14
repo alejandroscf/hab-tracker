@@ -1,170 +1,247 @@
 <html>
 <head>
     <title>HAB's Location</title>
-    <!--<meta http-equiv="refresh" content="30" />-->
     <meta charset="utf-8" />
-    <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="leaflet/leaflet.css" />
     <script type="text/javascript" src="leaflet/leaflet.js"></script>
     <script type="text/javascript" src="leafletembed.js"></script>
-    <!--<script type="text/javascript" src="leaflet-omnivore/leaflet-omnivore.min.js"></script>-->
     <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
-    <!--<script type="text/javascript" src="Chart.js/Chart.js"></script>-->
-    <!--<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.6.0/chart.min.js"></script>-->
-    <!--<script type="text/javascript" src="Chart.Scatter/Chart.Scatter.js"></script>-->
     <script
               src="https://code.jquery.com/jquery-3.3.1.min.js"
               integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
               crossorigin="anonymous"></script>
     <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
     <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
-
+    <style>
+        html, body {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        #map {
+            position: absolute; top: 0; left: 0; right: 0;
+            bottom: 80px; /* room for quick bar */
+        }
+        /* Quick bar: always visible at bottom */
+        #quick-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+            background: white; border-top: 1px solid #ddd;
+            padding: 8px 12px 12px;
+            display: flex; flex-direction: column; gap: 8px;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+        }
+        #quick-bar .row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        #quick-bar select {
+            flex: 1; padding: 10px; font-size: 16px;
+            border: 1px solid #ccc; border-radius: 8px; background: white;
+        }
+        #quick-bar button {
+            padding: 10px 16px; font-size: 15px; border-radius: 8px;
+            border: 1px solid #ccc; background: #f5f5f5; cursor: pointer;
+            white-space: nowrap;
+        }
+        #btn-settings {
+            padding: 10px 14px; font-size: 20px; border-radius: 8px;
+            border: none; background: #333; color: white; cursor: pointer;
+        }
+        .dest-group {
+            display: flex; gap: 6px; flex: 1;
+        }
+        .dest-group label {
+            flex: 1; text-align: center; padding: 8px 4px; font-size: 14px;
+            border: 1px solid #ccc; border-radius: 8px; cursor: pointer;
+            user-select: none; transition: background 0.15s;
+        }
+        .dest-group input[type=radio] { display: none; }
+        .dest-group input[type=radio]:checked + label {
+            background: #1a73e8; color: white; border-color: #1a73e8;
+        }
+        /* Settings drawer */
+        #settings-backdrop {
+            display: none; position: fixed; inset: 0; z-index: 1999;
+            background: rgba(0,0,0,0.3);
+        }
+        #settings-backdrop.open { display: block; }
+        #settings-panel {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 2000;
+            background: white; border-radius: 16px 16px 0 0;
+            padding: 0 16px 24px; max-height: 80vh; overflow-y: auto;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.25);
+            transform: translateY(100%); transition: transform 0.3s ease;
+        }
+        #settings-panel.open { transform: translateY(0); }
+        #settings-panel .drag-handle {
+            width: 40px; height: 4px; background: #ccc; border-radius: 2px;
+            margin: 12px auto 16px;
+        }
+        #settings-panel h3 {
+            margin: 14px 0 6px; font-size: 12px; color: #888;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        #settings-panel input[type=text], #settings-panel input[type=datetime-local] {
+            width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px;
+            border: 1px solid #ccc; border-radius: 8px; margin-bottom: 8px;
+        }
+        #settings-panel label {
+            display: flex; align-items: center; gap: 10px;
+            margin: 8px 0; font-size: 16px;
+        }
+        #settings-panel input[type=checkbox] {
+            width: 20px; height: 20px; flex-shrink: 0;
+        }
+        .param-row {
+            display: flex; flex-direction: column; margin-bottom: 8px;
+        }
+        .param-row span {
+            font-size: 13px; color: #555; margin-bottom: 4px;
+        }
+        /* Map overlay styles */
+        #info_text, #eta_text {
+            background: rgba(255,255,255,0.92); padding: 8px 12px;
+            border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+            font-size: 14px; max-width: 200px;
+        }
+        #info_text h2, #eta_text h2 { margin: 0 0 4px; font-size: 15px; }
+        #info_text h3, #eta_text h3 { margin: 2px 0; font-size: 13px; font-weight: normal; }
+    </style>
 </head>
 <body>
-    <h2><span class="distintivo"></span>'s status as of <span class="tiempo"></span>:</h2>
-<!--    <h4>Battery: (<span class="voltios"></span> V)</h4>-->
-    <h4>Data: (<span class="datos"></span>)</h4>
-    <h4>Globo: (<a class="globo"></a>)</h4>
-    <h4>Meta: (<a class="meta"></a>)</h4>
-    <label for="indicativo">Indicativo:</label>
-    <select id="indicativo" onchange="recarga()">
-         <option value="EA2DVJ-11">EA2DVJ-11</option>
-         <option value="EA4GZT-11">EA4GZT-11</option>
-   </select>
-    <input type="button" onclick="recarga()" value="Recarga" ></input>
-    <!--<input type="button" onclick="simula(globo_position)" value="¡Simula ahora!" ></input>-->
-    <label><input type="checkbox" id="bajando" value="bajando" onchange="recarga()">Simula caída</label>
-    <label><input type="checkbox" id="inicial" value="inicial" onchange="recarga()">Simula desde base</label>
-    <!--<input type="button" onclick="simula_caida(globo_position)" value="Simula caida" ></input>-->
-    <!--<input type="button" onclick="simula_inicial([42.0408,-0.5762])" value="Simula Almudevar" ></input>-->
-    <!--<input type="button" onclick="llevame_dest(globo_position)" value="Llevame globo" ></input>-->
-    <!--<input id="button_llevame_meta" disabled="true" type="button" onclick="llevame_dest(finish_position)" value="Llevame meta" ></input>-->
-    <br/>
-    <label for="refresh_interval">Internvalo de actualziación (s)</label><input type="text" id="refresh_interval" name="refresh_interval" size="3" value="30" onchange="set_interval()">
-    <br/>
-    <fieldset>
-         <legend>Destino:</legend>
 
-         <div>
-               <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga()">
-               <label for="dest_nada">No calcular</label>
-         </div>
-         <div>
-               <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga()">
-               <label for="dest_globo">Globo</label>
-         </div>
-         <div>
-               <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga()">
-               <label for="dest_meta">Meta</label>
-         </div>
-    </fieldset>
-    <br/>
-    <label for="ascent_rate">Velocidad de ascenso</label><input type="text" id="ascent_rate" name="ascent_rate" size="10" value="6.19"> 
-    <label for="burst_alt">Altura máxima</label><input type="text" id="burst_alt" name="burst_alt" size="10" value="30000"> 
-    <label for="descent_rate">Velocidad de descenso</label><input type="text" id="descent_rate" name="descent_rate" size="10" value="6.23"> 
-    <canvas height="30"></canvas>
-    <br/>
-    <!--Mallen
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.9008"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.4232"> 
-    -->
-    <!--Borja
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.8324"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.5265"> 
-    -->
-    <!--Morata
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.4733"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.4834"> 
-    -->
-    <!--Ateca
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.33184"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.79040"> 
-    -->
-    <!--Calamocha
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="40.92184"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-1.29942"> 
-    -->
-    <!--Estada
-    -->
-    <!--
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="42.064123"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="0.218785"> 
-    <label for="alt_ini">Altitud inicial</label><input type="text" id="alt_ini" name="alt_ini" size="5" value="330"> 
-    <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2026-06-12T16:00:00.000Z"> 
-    -->
-    <!--Quinto
-    -->
-    <label for="lat_ini">Latitud inicial</label><input type="text" id="lat_ini" name="lat_ini" size="10" value="41.427120"> 
-    <label for="lon_ini">Longitud inicial</label><input type="text" id="lon_ini" name="lon_ini" size="10" value="-0.497780"> 
-    <label for="alt_ini">Altitud inicial</label><input type="text" id="alt_ini" name="alt_ini" size="5" value="160"> 
-    <label for="fecha_ini">Fecha inicial</label><input type="text" id="fecha_ini" name="fecha_ini" size="30" value="2026-06-20T09:00:00.000Z"> 
+    <!-- Full-screen map -->
+    <div id="map"></div>
 
-    <canvas id="historyChart" height="30"></canvas>
-    <!-- <iframe width="<?=$width?>" height="<?=$height?>" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="<?=$embedUrl?>" style="border: 1px solid black"></iframe> -->
-    <div id="map" style=" height: 70%"></div>
-    <small><!--<a href="">View Larger Map</a>--></small>
-        <script>
-            var my_position;
-            var globo_position;
-            var finish_position;
-            var track;
-            var asc_poly, des_poly;
-            var globo_marker, my_marker, finish_marker;
-            var refresh_interval_id;
-            recarga();
-            //simula();
-            //simula_inicial([42.0408,-0.5762]);
-            initmap();
-            
-            map.addControl(new L.Control.Fullscreen());
+    <!-- Quick bar: always visible -->
+    <div id="quick-bar">
+        <div class="row">
+            <select id="indicativo" onchange="recarga()">
+                <option value="EA2DVJ-11">EA2DVJ-11</option>
+                <option value="EA4GZT-11">EA4GZT-11</option>
+            </select>
+            <button onclick="recarga()">⟳ Reload</button>
+            <button id="btn-settings" onclick="openSettings()">⚙</button>
+        </div>
+        <div class="row">
+            <div class="dest-group">
+                <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga()">
+                <label for="dest_nada">No calcular</label>
 
-				let textbox_payload = L.Control.extend({
-						onAdd: function() {
-							
-						var text = L.DomUtil.create('div');
-						text.id = "info_text";
-						text.innerHTML = '<h2><span class="distintivo"></span>: <span class="tiempo"></span></h2><h3>Data: (<span class="datos"></span>)</h3>'
-						return text;
-						},
-            });
-            new textbox_payload({ position: 'bottomleft' }).addTo(map);
+                <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga()">
+                <label for="dest_globo">Globo</label>
 
-				let textbox_eta = L.Control.extend({
-						onAdd: function() {
-							
-						var text = L.DomUtil.create('div');
-						text.id = "info_text";
-						text.innerHTML = '<h2>Llegada:</h2><h3>Globo: <span class="eta_globo"></span></h3><h3>Coche: <span class="eta_coche"></span></h3>'
-						return text;
-						},
-            });
-            new textbox_eta({ position: 'topright' }).addTo(map);
+                <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga()">
+                <label for="dest_meta">Meta</label>
+            </div>
+        </div>
+    </div>
 
-            /* Rectángulo límites */
-            var bounds = [[41.48937,-0.53218], [40.871279,-1.381347]];
-            L.rectangle(bounds, {fill:false,color: "#ff7800", weight: 2}).addTo(map);
+    <!-- Settings backdrop -->
+    <div id="settings-backdrop" onclick="closeSettings()"></div>
 
-             //map.setView(new L.LatLng(40, 0),17); 
-            //omnivore.gpx('s2g.php?file=tmplocation.log').addTo(map);
-            refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
+    <!-- Settings drawer -->
+    <div id="settings-panel">
+        <div class="drag-handle"></div>
+
+        <h3>Auto-refresh</h3>
+        <div class="param-row">
+            <span>Intervalo de actualización (s)</span>
+            <input type="text" id="refresh_interval" name="refresh_interval" value="30" onchange="set_interval()">
+        </div>
+
+        <h3>Simulación</h3>
+        <label><input type="checkbox" id="bajando" value="bajando" onchange="recarga()"> Simula caída</label>
+        <label><input type="checkbox" id="inicial" value="inicial" onchange="recarga()"> Simula desde base</label>
+
+        <h3>Parámetros de vuelo</h3>
+        <div class="param-row">
+            <span>Velocidad de ascenso</span>
+            <input type="text" id="ascent_rate" name="ascent_rate" value="6.19">
+        </div>
+        <div class="param-row">
+            <span>Altura máxima</span>
+            <input type="text" id="burst_alt" name="burst_alt" value="30000">
+        </div>
+        <div class="param-row">
+            <span>Velocidad de descenso</span>
+            <input type="text" id="descent_rate" name="descent_rate" value="6.23">
+        </div>
+
+        <h3>Posición de lanzamiento</h3>
+        <div class="param-row">
+            <span>Latitud inicial</span>
+            <input type="text" id="lat_ini" name="lat_ini" value="41.427120">
+        </div>
+        <div class="param-row">
+            <span>Longitud inicial</span>
+            <input type="text" id="lon_ini" name="lon_ini" value="-0.497780">
+        </div>
+        <div class="param-row">
+            <span>Altitud inicial</span>
+            <input type="text" id="alt_ini" name="alt_ini" value="160">
+        </div>
+        <div class="param-row">
+            <span>Fecha inicial</span>
+            <input type="text" id="fecha_ini" name="fecha_ini" value="2026-06-20T09:00:00.000Z">
+        </div>
+    </div>
+
+    <script>
+        var my_position;
+        var globo_position;
+        var finish_position;
+        var track;
+        var asc_poly, des_poly;
+        var globo_marker, my_marker, finish_marker;
+        var refresh_interval_id;
+
+        function openSettings() {
+            document.getElementById('settings-panel').classList.add('open');
+            document.getElementById('settings-backdrop').classList.add('open');
+        }
+        function closeSettings() {
+            document.getElementById('settings-panel').classList.remove('open');
+            document.getElementById('settings-backdrop').classList.remove('open');
+        }
+
+        recarga();
+        initmap();
+
+        map.addControl(new L.Control.Fullscreen());
+
+        let textbox_payload = L.Control.extend({
+            onAdd: function() {
+                var text = L.DomUtil.create('div');
+                text.id = "info_text";
+                text.innerHTML = '<h2><span class="distintivo"></span>: <span class="tiempo"></span></h2><h3>Data: <span class="datos"></span></h3>'
+                return text;
+            },
+        });
+        new textbox_payload({ position: 'bottomleft' }).addTo(map);
+
+        let textbox_eta = L.Control.extend({
+            onAdd: function() {
+                var text = L.DomUtil.create('div');
+                text.id = "eta_text";
+                text.innerHTML = '<h2>Llegada:</h2><h3>Globo: <span class="eta_globo"></span></h3><h3>Coche: <span class="eta_coche"></span></h3>'
+                return text;
+            },
+        });
+        new textbox_eta({ position: 'topright' }).addTo(map);
+
+        /* Rectángulo límites */
+        var bounds = [[41.48937,-0.53218], [40.871279,-1.381347]];
+        L.rectangle(bounds, {fill:false, color: "#ff7800", weight: 2}).addTo(map);
+
+        refresh_interval_id = setInterval(function () { recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
 
         function set_interval() {
             if (refresh_interval_id !== undefined) {
                clearInterval(refresh_interval_id);
             }
-            refresh_interval_id = setInterval(function () {recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
+            refresh_interval_id = setInterval(function () { recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
         }
-            
+
         function millis2time(diff) {
            let ms = diff % 1000;
            let ss = Math.floor(diff / 1000) % 60;
@@ -172,36 +249,21 @@
            let hh = Math.floor(diff / 1000 / 60 / 60);
            return "" + hh + ":" + mm;
         }
-            
 
         function recarga() {
-            //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             let encuentrame = navigator.geolocation.getCurrentPosition((pos) => {
-                //encuentrame();
                 my_position = [pos.coords.latitude, pos.coords.longitude];
-                //console.log(pos);
-                var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
-                var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
                 my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
-                //map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
-                //console.log(coor);
                 llevame();
             });
             $.ajax({
                 url: "aprs.php?indicativo=" + $("#indicativo").val(),
                 type: "GET",
                 dataType: "json",
-                //beforeSend: function(request) {
-                //    request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
-                //},
                 success: function (foo) {
                    $(".distintivo").text($("#indicativo").val());
-                   //console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
-                   //console.log(foo.entries[0].lasttime);
-                   //console.log(foo.entries[0].time);
-                   //console.log($fecha);
                    $(".tiempo").text($fecha.toLocaleString('en-GB'));
                    $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
                    url = "https://osmand.net/go?lat="+foo.entries[0].lat+"&lon="+foo.entries[0].lng;
@@ -214,12 +276,11 @@
                    globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
                    map.setView(new L.LatLng($lat, $lng));
                    simula(globo_position);
-
-
                },
             });
         };
-        function llevame () {
+
+        function llevame() {
           if ( $("input[name=destino]:checked").val() == 'dest_globo' ){
              llevame_dest(globo_position);
           } else if ( $("input[name=destino]:checked").val() == 'dest_meta' ){
@@ -227,37 +288,24 @@
           }
         }
 
-        function llevame_dest (dest) {
+        function llevame_dest(dest) {
           if (my_position !== undefined) {
              try { map.removeLayer(track); } catch (error) {};
              var point1 = "" + my_position[0] + "," + my_position[1];
-             var point2 = "" + dest[0] + "," + dest[1] ;
+             var point2 = "" + dest[0] + "," + dest[1];
              $.ajax({
-                //osrm (osm)
-                //url: "https://router.project-osrm.org/route/v1/driving/" + coor,
-                //data: {overview: "false", geometries: "polyline", steps: "true"},
-                //osrm (api)
-                //url: "https://api.openrouteservice.org/directions",
-                //data: { coordinates: coortxt, profile: "driving-car", geometry: "true", geometry_format: "polyline",},
-                //profile: "foot-hiking"
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
                 data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
-                //data: {point: point2, key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
                 type: "GET",
                 success: function (gpx_track) {
-                   //console.log(gpx_track);
                    track = omnivore.gpx.parse(gpx_track)
-                   //console.log(track);
                    track.addTo(map);
                    track.eachLayer(function(layer){
                       if (layer.feature && layer.feature.properties && layer.feature.properties.coordTimes) {
-                         //console.log(layer.feature.properties.coordTimes);
                          first_point_c = layer.feature.properties.coordTimes.at(0);
                          last_point_c = layer.feature.properties.coordTimes.at(-1);
                          let first_date_c = new Date(first_point_c);
                          let last_date_c = new Date(last_point_c);
-                         //console.log(first_date_c);
-                         //console.log(last_date_c);
                          eta_coche = millis2time(last_date_c - first_date_c);
                          if ( $("input[name=destino]:checked").val() == 'dest_meta' ) {
                             $('.eta_coche').text(eta_coche)
@@ -266,7 +314,6 @@
                          }
                       }
                    });
-                   //map.fitBounds(track.getBounds());
                 },
              });
           } else {
@@ -274,72 +321,59 @@
           }
         }
 
-   function wrapLng(lng) {
-      if (lng < 0) { lng = parseFloat(lng) + 360 };
-      return lng;
-   }
-   function unWrapLng(lng) {
-      if (lng > 180) { lng = lng - 360 };
-      return lng;
-   }
-	function simula(position) {
-      $fecha_sim = new Date().toISOString();
-      $ascent_rate = $("#ascent_rate").val();
-      $descent_rate = $("#descent_rate").val();
-      $burst_alt = $("#burst_alt").val();
-      if ( $("#inicial").prop('checked') ) {
-         position[0] = $("#lat_ini").val();
-         position[1] = $("#lon_ini").val();
-         position[2] = $("#alt_ini").val();
-         $fecha_sim = $("#fecha_ini").val();
-      } else if ( $("#bajando").prop('checked') || parseInt(position[2]) > parseInt($burst_alt) ) {
-         $burst_alt = (parseInt(position[2])+1)
-      }
-      $url = "https://api.v2.sondehub.org/tawhiri?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
-      try { map.removeLayer(asc_poly);map.removeLayer(des_poly);map.removeLayer(finish_marker); } catch (error) {};
-      //console.log(position[1]);
-      //console.log(wrapLng(position[1]));
-      $.getJSON( 
-         $url,
-         function ( data ) { 
-            //console.log(data);
-            var asc_points = data.prediction[0].trajectory.map(function(x) {
-               return [x.latitude,unWrapLng(x.longitude)];
-            });
-            asc_poly = L.polyline(asc_points, {color: 'green'}).addTo(map);
-            //map.fitBounds(asc_poly.getBounds());
-            //console.log(asc_poly);
-            var des_points = data.prediction[1].trajectory.map(function(x) {
-               return [x.latitude,unWrapLng(x.longitude)];
-            });
-            //console.log(des_points);
-            first_point = data.prediction[0].trajectory.at(0);
-            last_point = data.prediction[1].trajectory.at(-1);
-            let first_date = new Date(first_point.datetime);
-            let last_date = new Date(last_point.datetime);
-            //console.log(first_date);
-            //console.log(last_date);
-            eta_globo = millis2time(last_date - first_date);
-            des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
-            map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
-            //map.setView(new L.LatLng(41.6633,-0.8250),12);
-            //console.log(des_poly);
-            //console.log(des_points[des_points.length - 1]);
-            finish_position = des_points[des_points.length - 1];
-            finish_marker = L.marker(finish_position).addTo(map);
-            //finish_marker.bindPopup("Llegada:<br\>Globo:<br\>Coche:").openPopup();
-            //console.log(globo_position);
-            url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
-            $(".meta").text(url);
-            $(".meta").attr("href",url);
-            $("#button_llevame_meta").prop('disabled', false);
-            $(".eta_globo").text(eta_globo);
-         }
-      );
-	};
+        function wrapLng(lng) {
+           if (lng < 0) { lng = parseFloat(lng) + 360 };
+           return lng;
+        }
+        function unWrapLng(lng) {
+           if (lng > 180) { lng = lng - 360 };
+           return lng;
+        }
 
+        function simula(position) {
+           $fecha_sim = new Date().toISOString();
+           $ascent_rate = $("#ascent_rate").val();
+           $descent_rate = $("#descent_rate").val();
+           $burst_alt = $("#burst_alt").val();
+           if ( $("#inicial").prop('checked') ) {
+              position[0] = $("#lat_ini").val();
+              position[1] = $("#lon_ini").val();
+              position[2] = $("#alt_ini").val();
+              $fecha_sim = $("#fecha_ini").val();
+           } else if ( $("#bajando").prop('checked') || parseInt(position[2]) > parseInt($burst_alt) ) {
+              $burst_alt = (parseInt(position[2])+1)
+           }
+           $url = "https://api.v2.sondehub.org/tawhiri?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
+           try { map.removeLayer(asc_poly); map.removeLayer(des_poly); map.removeLayer(finish_marker); } catch (error) {};
+           $.getJSON(
+              $url,
+              function (data) {
+                 var asc_points = data.prediction[0].trajectory.map(function(x) {
+                    return [x.latitude, unWrapLng(x.longitude)];
+                 });
+                 asc_poly = L.polyline(asc_points, {color: 'green'}).addTo(map);
+                 var des_points = data.prediction[1].trajectory.map(function(x) {
+                    return [x.latitude, unWrapLng(x.longitude)];
+                 });
+                 first_point = data.prediction[0].trajectory.at(0);
+                 last_point = data.prediction[1].trajectory.at(-1);
+                 let first_date = new Date(first_point.datetime);
+                 let last_date = new Date(last_point.datetime);
+                 eta_globo = millis2time(last_date - first_date);
+                 des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
+                 map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
+                 finish_position = des_points[des_points.length - 1];
+                 finish_marker = L.marker(finish_position).addTo(map);
+                 url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
+                 $(".meta").text(url);
+                 $(".meta").attr("href",url);
+                 $("#button_llevame_meta").prop('disabled', false);
+                 $(".eta_globo").text(eta_globo);
+              }
+           );
+        };
 
-        </script>
+    </script>
 
 </body>
 </html>
