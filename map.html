@@ -98,6 +98,12 @@
         .param-row span {
             font-size: 13px; color: #555; margin-bottom: 4px;
         }
+        /* Emoji markers */
+        .emoji-marker {
+            background: none; border: none;
+            font-size: 24px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
         /* Map overlay styles */
         #info_text {
             position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -327,7 +333,12 @@ let textbox_eta = L.Control.extend({
         function recarga() {
             let encuentrame = navigator.geolocation.getCurrentPosition((pos) => {
                 my_position = [pos.coords.latitude, pos.coords.longitude];
-                my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
+                if (my_marker) {
+                    my_marker.setLatLng(my_position);
+                } else {
+                    var carIcon = L.divIcon({html: '🚗', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14]});
+                    my_marker = L.marker(my_position, {icon: carIcon}).addTo(map);
+                }
                 llevame();
             });
             $.ajax({
@@ -348,7 +359,7 @@ let textbox_eta = L.Control.extend({
                    globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude];
 
                    // Update or create the balloon marker
-                   var globoIcon = new L.Icon({iconUrl: 'globo.png'});
+                   var globoIcon = new L.Icon({iconUrl: 'globo.png', iconSize: [25, 53], iconAnchor: [12, 53]});
                    if (globo_marker) {
                        globo_marker.setLatLng([$lat, $lng]);
                    } else {
@@ -462,7 +473,8 @@ let textbox_eta = L.Control.extend({
                     firstLoad = false;
                  }
                  finish_position = des_points[des_points.length - 1];
-                 finish_marker = L.marker(finish_position).addTo(map);
+                 var flagIcon = L.divIcon({html: '🏁', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 28]});
+                 finish_marker = L.marker(finish_position, {icon: flagIcon}).addTo(map);
                  $(".meta-geo").attr("href", "geo:" + finish_position[0] + "," + finish_position[1] + "?q=" + finish_position[0] + "," + finish_position[1] + "(Meta)");
                  $("#button_llevame_meta").prop('disabled', false);
                  $(".eta_globo").text(eta_globo);
