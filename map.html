@@ -28,8 +28,14 @@
     <h4>Meta: (<a class="meta"></a>)</h4>
     <label for="indicativo">Indicativo:</label>
     <select id="indicativo" onchange="recarga()">
-         <option value="EA2DVJ-11">EA2DVJ-11</option>
-         <option value="EA4GZT-11">EA4GZT-11</option>
+         <optgroup label="APRS">
+             <option value="EA2DVJ-11">EA2DVJ-11</option>
+             <option value="EA4GZT-11">EA4GZT-11</option>
+         </optgroup>
+         <optgroup label="TTN">
+             <option value="TTN:eui-70b3d57ed0061b13">eui-70b3d57ed0061b13</option>
+             <option value="TTN:eui-70b3d57ed0061c47">eui-70b3d57ed0061c47</option>
+         </optgroup>
    </select>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
     <!--<input type="button" onclick="simula(globo_position)" value="¡Simula ahora!" ></input>-->
@@ -175,49 +181,87 @@
             
 
         function recarga() {
-            //$.getJSON( 'https://api.aprs.fi/api/get?name=EA2DVJ-11&what=loc&apikey=109984.vUFksEiAq8PAsJQ&format=json', function ( data ) { alert(data);}   );
             let encuentrame = navigator.geolocation.getCurrentPosition((pos) => {
-                //encuentrame();
                 my_position = [pos.coords.latitude, pos.coords.longitude];
-                //console.log(pos);
-                var coor = "" + pos.coords.latitude + "," + pos.coords.longitude + ";" + $lat + "," + $lng ;
-                var coortxt = "" + pos.coords.latitude + "," + pos.coords.longitude + "|" + $lat + "," + $lng ;
                 my_marker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
-                //map.setView(new L.LatLng(pos.coords.latitude, pos.coords.longitude));
-                //console.log(coor);
                 llevame();
             });
+            var val = $("#indicativo").val();
+            if (val.startsWith("TTN:")) {
+                recarga_ttn(val.substring(4));
+            } else {
+                recarga_aprs(val);
+            }
+        };
+
+        function recarga_aprs(callsign) {
             $.ajax({
-                url: "aprs.php?indicativo=" + $("#indicativo").val(),
+                url: "aprs.php?indicativo=" + callsign,
                 type: "GET",
                 dataType: "json",
-                //beforeSend: function(request) {
-                //    request.setRequestHeader("User-Agent","HAB-tracker/0.0.1 (https://github.com/alejandroscf/hab-tracker)");
-                //},
                 success: function (foo) {
-                   $(".distintivo").text($("#indicativo").val());
-                   //console.log(foo);
                    $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime*1000);
-                   //console.log(foo.entries[0].lasttime);
-                   //console.log(foo.entries[0].time);
-                   //console.log($fecha);
-                   $(".tiempo").text($fecha.toLocaleString('en-GB'));
-                   $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
-                   url = "https://osmand.net/go?lat="+foo.entries[0].lat+"&lon="+foo.entries[0].lng;
-                   $(".globo").text(url);
-                   $(".globo").attr("href",url);
-                   $lat = foo.entries[0].lat;
-                   $lng = foo.entries[0].lng;
-                   globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude]
-                   var globoIcon = new L.Icon({iconUrl: 'globo.png'});
-                   globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
-                   map.setView(new L.LatLng($lat, $lng));
-                   simula(globo_position);
-
-
+                   actualizaGlobo(
+                       callsign,
+                       foo.entries[0].lat,
+                       foo.entries[0].lng,
+                       foo.entries[0].altitude,
+                       $fecha,
+                       foo.entries[0].comment.replace(/,/g,', ')
+                   );
                },
             });
+        };
+
+        function recarga_ttn(dev_id) {
+            var end = new Date().toISOString();
+            var start = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+            $.ajax({
+                url: "https://api.ttnmapper.org/device/data",
+                data: { dev_id: dev_id, start_time: start, end_time: end, limit: 10 },
+                type: "GET",
+                dataType: "json",
+                success: function(data) { procesaTTN(dev_id, data); },
+                error: function() {
+                    // CORS blocked — fall back to server-side proxy
+                    $.ajax({
+                        url: "ttn.php?dev_id=" + encodeURIComponent(dev_id),
+                        type: "GET",
+                        dataType: "json",
+                        success: function(data) { procesaTTN(dev_id, data); }
+                    });
+                }
+            });
+        };
+
+        function procesaTTN(dev_id, data) {
+            if (!data || !data.length) { console.log("No TTN data for " + dev_id); return; }
+            data.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
+            var p = data[0];
+            actualizaGlobo(
+                dev_id,
+                p.latitude,
+                p.longitude,
+                p.altitude,
+                new Date(p.time),
+                'Alt: ' + Math.round(p.altitude) + 'm | Sats: ' + (p.satellites || '?')
+            );
+        };
+
+        function actualizaGlobo(label, lat, lng, alt, fecha, datos) {
+            $(".distintivo").text(label);
+            $(".tiempo").text(fecha.toLocaleString('en-GB'));
+            $(".datos").text(datos);
+            url = "https://osmand.net/go?lat=" + lat + "&lon=" + lng;
+            $(".globo").text(url);
+            $(".globo").attr("href", url);
+            $lat = lat; $lng = lng;
+            globo_position = [lat, lng, alt];
+            var globoIcon = new L.Icon({iconUrl: 'globo.png'});
+            globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
+            map.setView(new L.LatLng($lat, $lng));
+            simula(globo_position);
         };
         function llevame () {
           if ( $("input[name=destino]:checked").val() == 'dest_globo' ){
