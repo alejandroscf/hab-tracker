@@ -216,10 +216,10 @@
 
         function recarga_ttn(dev_id) {
             var end = new Date().toISOString();
-            var start = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+            var start = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
             $.ajax({
                 url: "https://api.ttnmapper.org/device/data",
-                data: { dev_id: dev_id, start_time: start, end_time: end, limit: 10 },
+                data: { dev_id: dev_id, start_time: start, end_time: end, limit: 100 },
                 type: "GET",
                 dataType: "json",
                 success: function(data) { procesaTTN(dev_id, data); },
