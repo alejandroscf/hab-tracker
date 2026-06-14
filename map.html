@@ -217,6 +217,7 @@
         var globo_position;
         var finish_position;
         var track;
+        var xhr_llevame;
         var asc_poly, des_poly, history_poly;
         var globo_marker, my_marker, finish_marker;
         var firstLoad = true;
@@ -387,14 +388,15 @@ let textbox_eta = L.Control.extend({
 
         function llevame_dest(dest) {
           if (my_position !== undefined) {
-             try { map.removeLayer(track); } catch (error) {};
+             if (xhr_llevame) { xhr_llevame.abort(); }
              var point1 = "" + my_position[0] + "," + my_position[1];
              var point2 = "" + dest[0] + "," + dest[1];
-             $.ajax({
+             xhr_llevame = $.ajax({
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
                 data: {point: point2, type: "gpx", key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"},
                 type: "GET",
                 success: function (gpx_track) {
+                   try { map.removeLayer(track); } catch(e) {}
                    track = omnivore.gpx.parse(gpx_track)
                    track.addTo(map);
                    track.eachLayer(function(layer){
