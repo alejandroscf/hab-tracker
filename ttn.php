@@ -1,4 +1,6 @@
 <?php
+require_once 'settings.php';
+
 $dev_id = $_GET['dev_id'] ?? '';
 $dev_id = preg_replace('/[^a-zA-Z0-9\-]/', '', $dev_id);
 if (!$dev_id) { http_response_code(400); echo '[]'; exit; }
