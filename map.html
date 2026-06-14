@@ -43,8 +43,9 @@
             white-space: nowrap;
         }
         #btn-settings {
-            padding: 10px 14px; font-size: 20px; border-radius: 8px;
-            border: none; background: #333; color: white; cursor: pointer;
+            padding: 10px 14px; border-radius: 8px;
+            border: 2px solid #1a73e8; background: white; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
         }
         .dest-group {
             display: flex; gap: 6px; flex: 1;
@@ -98,10 +99,17 @@
             font-size: 13px; color: #555; margin-bottom: 4px;
         }
         /* Map overlay styles */
-        #info_text, #eta_text {
-            background: rgba(255,255,255,0.92); padding: 8px 12px;
+        #info_text {
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            width: 90vw; max-width: 560px; box-sizing: border-box;
+            background: rgba(255,255,255,0.55); padding: 10px 16px;
             border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
-            font-size: 14px; max-width: 200px;
+            font-size: 14px; z-index: 999; pointer-events: none;
+        }
+        #eta_text {
+            background: rgba(255,255,255,0.55); padding: 8px 12px;
+            border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+            font-size: 14px;
         }
         #info_text h2, #eta_text h2 { margin: 0 0 4px; font-size: 15px; }
         #info_text h3, #eta_text h3 { margin: 2px 0; font-size: 13px; font-weight: normal; }
@@ -112,6 +120,12 @@
     <!-- Full-screen map -->
     <div id="map"></div>
 
+    <!-- Payload info overlay: centered above quick bar -->
+    <div id="info_text">
+        <h2><span class="distintivo"></span>: <span class="tiempo"></span></h2>
+        <h3>Data: <span class="datos"></span></h3>
+    </div>
+
     <!-- Quick bar: always visible -->
     <div id="quick-bar">
         <div class="row">
@@ -120,7 +134,7 @@
                 <option value="EA4GZT-11">EA4GZT-11</option>
             </select>
             <button onclick="recarga()">⟳ Reload</button>
-            <button id="btn-settings" onclick="openSettings()">⚙</button>
+            <button id="btn-settings" onclick="openSettings()"><svg width="22" height="22" viewBox="0 0 24 24" fill="#1a73e8" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.96s-.03-.66-.07-1l2.05-1.63c.18-.14.23-.41.12-.62l-1.95-3.37c-.12-.22-.37-.3-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.9c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.62l2.05 1.63c-.04.34-.07.67-.07 1s.03.65.07.99L2.86 14.74c-.18.14-.23.41-.12.62l1.95 3.37c.12.22.37.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.24.41.48.41h3.9c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.95-3.37c.12-.21.07-.47-.12-.62l-2.01-1.58z"/></svg></button>
         </div>
         <div class="row">
             <div class="dest-group">
@@ -193,6 +207,7 @@
         var track;
         var asc_poly, des_poly;
         var globo_marker, my_marker, finish_marker;
+        var firstLoad = true;
         var refresh_interval_id;
 
         function openSettings() {
@@ -209,17 +224,7 @@
 
         map.addControl(new L.Control.Fullscreen());
 
-        let textbox_payload = L.Control.extend({
-            onAdd: function() {
-                var text = L.DomUtil.create('div');
-                text.id = "info_text";
-                text.innerHTML = '<h2><span class="distintivo"></span>: <span class="tiempo"></span></h2><h3>Data: <span class="datos"></span></h3>'
-                return text;
-            },
-        });
-        new textbox_payload({ position: 'bottomleft' }).addTo(map);
-
-        let textbox_eta = L.Control.extend({
+let textbox_eta = L.Control.extend({
             onAdd: function() {
                 var text = L.DomUtil.create('div');
                 text.id = "eta_text";
@@ -274,7 +279,6 @@
                    globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude]
                    var globoIcon = new L.Icon({iconUrl: 'globo.png'});
                    globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
-                   map.setView(new L.LatLng($lat, $lng));
                    simula(globo_position);
                },
             });
@@ -361,7 +365,10 @@
                  let last_date = new Date(last_point.datetime);
                  eta_globo = millis2time(last_date - first_date);
                  des_poly = L.polyline(des_points, {color: 'red'}).addTo(map);
-                 map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
+                 if (firstLoad) {
+                    map.fitBounds(des_poly.getBounds().extend(asc_poly.getBounds()));
+                    firstLoad = false;
+                 }
                  finish_position = des_points[des_points.length - 1];
                  finish_marker = L.marker(finish_position).addTo(map);
                  url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
