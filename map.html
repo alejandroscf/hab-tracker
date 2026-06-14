@@ -13,6 +13,8 @@
               crossorigin="anonymous"></script>
     <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
     <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js'></script>
+    <link href='https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.css' rel='stylesheet' />
     <style>
         html, body {
             margin: 0; padding: 0; height: 100%; overflow: hidden;
@@ -299,6 +301,24 @@
 
         map.addControl(new L.Control.Fullscreen());
 
+        L.control.locate({
+            position: 'topleft',
+            flyTo: false,
+            keepCurrentZoomLevel: true,
+            strings: { title: 'Seguir mi posición' }
+        }).addTo(map);
+
+        map.on('locationfound', function(e) {
+            my_position = [e.latlng.lat, e.latlng.lng];
+            if (my_marker) {
+                my_marker.setLatLng(my_position);
+            } else {
+                var carIcon = L.divIcon({html: '🚗', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14]});
+                my_marker = L.marker(my_position, {icon: carIcon}).addTo(map);
+            }
+            llevame();
+        });
+
 let textbox_eta = L.Control.extend({
             onAdd: function() {
                 var text = L.DomUtil.create('div');
@@ -331,16 +351,6 @@ let textbox_eta = L.Control.extend({
         }
 
         function recarga() {
-            let encuentrame = navigator.geolocation.getCurrentPosition((pos) => {
-                my_position = [pos.coords.latitude, pos.coords.longitude];
-                if (my_marker) {
-                    my_marker.setLatLng(my_position);
-                } else {
-                    var carIcon = L.divIcon({html: '🚗', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14]});
-                    my_marker = L.marker(my_position, {icon: carIcon}).addTo(map);
-                }
-                llevame();
-            });
             $.ajax({
                 url: "aprs.php?indicativo=" + $("#indicativo").val(),
                 type: "GET",
