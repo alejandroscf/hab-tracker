@@ -113,6 +113,11 @@
         }
         #info_text h2, #eta_text h2 { margin: 0 0 4px; font-size: 15px; }
         #info_text h3, #eta_text h3 { margin: 2px 0; font-size: 13px; font-weight: normal; }
+        .nav-link {
+            display: block; text-decoration: none; color: inherit;
+            background: rgba(0,0,0,0.1); border-radius: 8px;
+            padding: 4px 8px; margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -228,7 +233,7 @@ let textbox_eta = L.Control.extend({
             onAdd: function() {
                 var text = L.DomUtil.create('div');
                 text.id = "eta_text";
-                text.innerHTML = '<h2>Llegada:</h2><h3>Globo: <span class="eta_globo"></span></h3><h3>Coche: <span class="eta_coche"></span></h3>'
+                text.innerHTML = '<h2>Llegada:</h2><h3><a class="nav-link globo-geo">🎈 Globo: <span class="eta_globo"></span></a></h3><h3><a class="nav-link meta-geo">🏁 Meta: <span class="eta_coche"></span></a></h3>'
                 return text;
             },
         });
@@ -279,6 +284,7 @@ let textbox_eta = L.Control.extend({
                    globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude]
                    var globoIcon = new L.Icon({iconUrl: 'globo.png'});
                    globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
+                   $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + $("#indicativo").val() + ")");
                    simula(globo_position);
                },
             });
@@ -371,9 +377,7 @@ let textbox_eta = L.Control.extend({
                  }
                  finish_position = des_points[des_points.length - 1];
                  finish_marker = L.marker(finish_position).addTo(map);
-                 url = "https://osmand.net/go?lat="+finish_position[0]+"&lon="+finish_position[1];
-                 $(".meta").text(url);
-                 $(".meta").attr("href",url);
+                 $(".meta-geo").attr("href", "geo:" + finish_position[0] + "," + finish_position[1] + "?q=" + finish_position[0] + "," + finish_position[1] + "(Meta)");
                  $("#button_llevame_meta").prop('disabled', false);
                  $(".eta_globo").text(eta_globo);
               }
