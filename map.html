@@ -134,7 +134,7 @@
     <!-- Quick bar: always visible -->
     <div id="quick-bar">
         <div class="row">
-            <select id="indicativo" onchange="recarga()">
+            <select id="indicativo" onchange="globo_marker=null; firstLoad=true; recarga()">
                 <option value="EA2DVJ-11">EA2DVJ-11</option>
                 <option value="EA4GZT-11">EA4GZT-11</option>
             </select>
@@ -203,6 +203,13 @@
             <span>Fecha inicial</span>
             <input type="text" id="fecha_ini" name="fecha_ini" value="2026-06-20T09:00:00.000Z">
         </div>
+
+        <h3>Track</h3>
+        <div id="track-info" style="font-size:13px;color:#555;margin-bottom:8px;"></div>
+        <div class="row" style="gap:8px">
+            <button onclick="downloadTrack()" style="flex:1;padding:10px;font-size:15px;border-radius:8px;border:1px solid #ccc;background:#f5f5f5;cursor:pointer">⬇ Download GPX</button>
+            <button onclick="clearTrack()" style="flex:1;padding:10px;font-size:15px;border-radius:8px;border:1px solid #fcc;background:#fff0f0;color:#c00;cursor:pointer">✕ Clear track</button>
+        </div>
     </div>
 
     <script>
@@ -210,10 +217,66 @@
         var globo_position;
         var finish_position;
         var track;
-        var asc_poly, des_poly;
+        var asc_poly, des_poly, history_poly;
         var globo_marker, my_marker, finish_marker;
         var firstLoad = true;
         var refresh_interval_id;
+
+        function trackKey(callsign) {
+            var d = new Date();
+            var dateStr = d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
+            return 'hab_track_' + callsign + '_' + dateStr;
+        }
+
+        function loadTrack(callsign) {
+            try {
+                return JSON.parse(localStorage.getItem(trackKey(callsign)) || '[]');
+            } catch(e) { return []; }
+        }
+
+        function saveTrack(callsign, positions) {
+            try { localStorage.setItem(trackKey(callsign), JSON.stringify(positions)); } catch(e) {}
+        }
+
+        function pruneOldTracks() {
+            var cutoff = Date.now() - 48 * 3600 * 1000;
+            Object.keys(localStorage).forEach(function(key) {
+                if (!key.startsWith('hab_track_')) return;
+                try {
+                    var positions = JSON.parse(localStorage.getItem(key) || '[]');
+                    if (positions.length && new Date(positions[0].t).getTime() < cutoff) {
+                        localStorage.removeItem(key);
+                    }
+                } catch(e) { localStorage.removeItem(key); }
+            });
+        }
+
+        pruneOldTracks();
+
+        function downloadTrack() {
+            var callsign = $("#indicativo").val();
+            var positions = loadTrack(callsign);
+            if (!positions.length) { alert('No hay datos de track para ' + callsign); return; }
+            var gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="HAB Tracker">\n  <trk><name>' + callsign + '</name><trkseg>\n';
+            positions.forEach(function(p) {
+                var dt = new Date(p.t * 1000).toISOString();
+                gpx += '    <trkpt lat="' + p.lat + '" lon="' + p.lng + '"><ele>' + p.alt + '</ele><time>' + dt + '</time></trkpt>\n';
+            });
+            gpx += '  </trkseg></trk>\n</gpx>';
+            var blob = new Blob([gpx], {type: 'application/gpx+xml'});
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = callsign + '_' + new Date().toISOString().slice(0, 10) + '.gpx';
+            a.click();
+        }
+
+        function clearTrack() {
+            var callsign = $("#indicativo").val();
+            localStorage.removeItem(trackKey(callsign));
+            try { map.removeLayer(history_poly); } catch(e) {}
+            history_poly = null;
+            $('#track-info').text(callsign + ' — 0 puntos');
+        }
 
         function openSettings() {
             document.getElementById('settings-panel').classList.add('open');
@@ -281,10 +344,34 @@ let textbox_eta = L.Control.extend({
                    $(".globo").attr("href",url);
                    $lat = foo.entries[0].lat;
                    $lng = foo.entries[0].lng;
-                   globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude]
+                   globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude];
+
+                   // Update or create the balloon marker
                    var globoIcon = new L.Icon({iconUrl: 'globo.png'});
-                   globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
-                   $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + $("#indicativo").val() + ")");
+                   if (globo_marker) {
+                       globo_marker.setLatLng([$lat, $lng]);
+                   } else {
+                       globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
+                   }
+
+                   // Store position in localStorage (deduplicate by timestamp)
+                   var callsign = $("#indicativo").val();
+                   var positions = loadTrack(callsign);
+                   var lastTime = foo.entries[0].lasttime;
+                   if (!positions.length || positions[positions.length - 1].t !== lastTime) {
+                       positions.push({t: lastTime, lat: $lat, lng: $lng, alt: foo.entries[0].altitude});
+                       saveTrack(callsign, positions);
+                   }
+
+                   // Draw historical track in purple
+                   try { map.removeLayer(history_poly); } catch(e) {}
+                   if (positions.length > 1) {
+                       var latlngs = positions.map(function(p) { return [p.lat, p.lng]; });
+                       history_poly = L.polyline(latlngs, {color: '#9c27b0', weight: 3}).addTo(map);
+                   }
+                   $('#track-info').text(callsign + ' — ' + positions.length + ' punto' + (positions.length !== 1 ? 's' : ''));
+
+                   $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + callsign + ")");
                    simula(globo_position);
                },
             });
