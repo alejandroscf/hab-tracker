@@ -108,7 +108,7 @@
         }
         /* Map overlay styles */
         #info_text {
-            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
             width: 90vw; max-width: 560px; box-sizing: border-box;
             background: rgba(255,255,255,0.55); padding: 10px 16px;
             border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
@@ -142,7 +142,7 @@
     <!-- Quick bar: always visible -->
     <div id="quick-bar">
         <div class="row">
-            <select id="indicativo" onchange="globo_marker=null; firstLoad=true; recarga()">
+            <select id="indicativo" onchange="if(globo_marker){map.removeLayer(globo_marker);} globo_marker=null; firstLoad=true; recarga()">
                 <optgroup label="APRS">
                     <option value="EA2DVJ-11">EA2DVJ-11</option>
                     <option value="EA4GZT-11">EA4GZT-11</option>
