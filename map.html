@@ -33,8 +33,9 @@
              <option value="EA4GZT-11">EA4GZT-11</option>
          </optgroup>
          <optgroup label="TTN">
-             <option value="TTN:eui-70b3d57ed0061b13">eui-70b3d57ed0061b13</option>
-             <option value="TTN:eui-70b3d57ed0061c47">eui-70b3d57ed0061c47</option>
+             <option value="TTN:eui-70b3d57ed0061b13">#1 &mdash; eui-70b3d57ed0061b13</option>
+             <option value="TTN:eui-70b3d57ed0061c44">#2 &mdash; eui-70b3d57ed0061c44</option>
+             <option value="TTN:eui-70b3d57ed0061c47">#3 &mdash; eui-70b3d57ed0061c47</option>
          </optgroup>
    </select>
     <input type="button" onclick="recarga()" value="Recarga" ></input>
@@ -215,37 +216,39 @@
         };
 
         function recarga_ttn(dev_id) {
-            var end = new Date().toISOString();
-            var start = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+            // Always go through the server-side proxy: the Storage Integration
+            // (full decoded payload) needs the secret API key, and ttn.php also
+            // owns the TTN Mapper fallback when storage has no data yet.
             $.ajax({
-                url: "https://api.ttnmapper.org/device/data",
-                data: { dev_id: dev_id, start_time: start, end_time: end, limit: 100 },
+                url: "ttn.php?dev_id=" + encodeURIComponent(dev_id),
                 type: "GET",
                 dataType: "json",
-                success: function(data) { procesaTTN(dev_id, data); },
-                error: function() {
-                    // CORS blocked — fall back to server-side proxy
-                    $.ajax({
-                        url: "ttn.php?dev_id=" + encodeURIComponent(dev_id),
-                        type: "GET",
-                        dataType: "json",
-                        success: function(data) { procesaTTN(dev_id, data); }
-                    });
-                }
+                success: function(data) { procesaTTN(dev_id, data); }
             });
         };
 
-        function procesaTTN(dev_id, data) {
-            if (!data || !data.length) { console.log("No TTN data for " + dev_id); return; }
-            data.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
-            var p = data[0];
+        function procesaTTN(dev_id, p) {
+            if (!p || p.latitude == null) { console.log("No TTN data for " + dev_id); return; }
+
+            // Build the data string from whatever fields are present.
+            var parts = [];
+            if (p.altitude != null)     parts.push('Alt: ' + Math.round(p.altitude) + 'm');
+            if (p.temperature != null)  parts.push('Temp: ' + p.temperature + '°C');
+            if (p.digitals && p.digitals.length) {
+                p.digitals.forEach(function(d, i) {
+                    parts.push('Out' + (i + 1) + ': ' + d.value);
+                });
+            }
+            if (p.rssi != null)         parts.push('RSSI: ' + p.rssi);
+            if (p.satellites != null)   parts.push('Sats: ' + p.satellites);
+
             actualizaGlobo(
                 dev_id,
                 p.latitude,
                 p.longitude,
                 p.altitude,
                 new Date(p.time),
-                'Alt: ' + Math.round(p.altitude) + 'm | Sats: ' + (p.satellites || '?')
+                parts.join(' | ')
             );
         };
 
