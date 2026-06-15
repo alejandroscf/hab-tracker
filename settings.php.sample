@@ -2,4 +2,16 @@
     global $AprsFiKey;
     # API key of APRS.FI
     $AprsFiKey = 'CHANGE ME!';
+
+    global $TtnApiKey;
+    # API key for The Things Network Storage Integration (RIGHT_APPLICATION_TRAFFIC_READ)
+    $TtnApiKey = 'CHANGE ME!';
+
+    global $TtnAppId;
+    # TTN application id that owns the devices
+    $TtnAppId = 'CHANGE ME!';
+
+    global $TtnRegion;
+    # TTN cluster/region host prefix (eu1, nam1, au1, ...)
+    $TtnRegion = 'eu1';
 ?>

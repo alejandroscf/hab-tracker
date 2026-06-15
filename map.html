@@ -143,8 +143,15 @@
     <div id="quick-bar">
         <div class="row">
             <select id="indicativo" onchange="globo_marker=null; firstLoad=true; recarga()">
-                <option value="EA2DVJ-11">EA2DVJ-11</option>
-                <option value="EA4GZT-11">EA4GZT-11</option>
+                <optgroup label="APRS">
+                    <option value="EA2DVJ-11">EA2DVJ-11</option>
+                    <option value="EA4GZT-11">EA4GZT-11</option>
+                </optgroup>
+                <optgroup label="TTN">
+                    <option value="TTN:eui-70b3d57ed0061b13">#1 &mdash; eui-70b3d57ed0061b13</option>
+                    <option value="TTN:eui-70b3d57ed0061c44">#2 &mdash; eui-70b3d57ed0061c44</option>
+                    <option value="TTN:eui-70b3d57ed0061c47">#3 &mdash; eui-70b3d57ed0061c47</option>
+                </optgroup>
             </select>
             <button onclick="recarga()">⟳ Reload</button>
             <button id="btn-settings" onclick="openSettings()"><svg width="22" height="22" viewBox="0 0 24 24" fill="#1a73e8" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.96s-.03-.66-.07-1l2.05-1.63c.18-.14.23-.41.12-.62l-1.95-3.37c-.12-.22-.37-.3-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.9c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.62l2.05 1.63c-.04.34-.07.67-.07 1s.03.65.07.99L2.86 14.74c-.18.14-.23.41-.12.62l1.95 3.37c.12.22.37.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.24.41.48.41h3.9c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.95-3.37c.12-.21.07-.47-.12-.62l-2.01-1.58z"/></svg></button>
@@ -352,52 +359,110 @@ let textbox_eta = L.Control.extend({
         }
 
         function recarga() {
+            var val = $("#indicativo").val();
+            if (val.indexOf("TTN:") === 0) {
+                recarga_ttn(val.substring(4));
+            } else {
+                recarga_aprs(val);
+            }
+        };
+
+        function recarga_aprs(callsign) {
             $.ajax({
-                url: "aprs.php?indicativo=" + $("#indicativo").val(),
+                url: "aprs.php?indicativo=" + callsign,
                 type: "GET",
                 dataType: "json",
                 success: function (foo) {
-                   $(".distintivo").text($("#indicativo").val());
-                   $fecha = new Date();
-                   $fecha.setTime(foo.entries[0].lasttime*1000);
-                   $(".tiempo").text($fecha.toLocaleString('en-GB'));
-                   $(".datos").text(foo.entries[0].comment.replace(/,/g,', '));
-                   url = "https://osmand.net/go?lat="+foo.entries[0].lat+"&lon="+foo.entries[0].lng;
-                   $(".globo").text(url);
-                   $(".globo").attr("href",url);
-                   $lat = foo.entries[0].lat;
-                   $lng = foo.entries[0].lng;
-                   globo_position = [foo.entries[0].lat, foo.entries[0].lng, foo.entries[0].altitude];
-
-                   // Update or create the balloon marker
-                   var globoIcon = new L.Icon({iconUrl: 'globo.png', iconSize: [25, 53], iconAnchor: [12, 53]});
-                   if (globo_marker) {
-                       globo_marker.setLatLng([$lat, $lng]);
-                   } else {
-                       globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
-                   }
-
-                   // Store position in localStorage (deduplicate by timestamp)
-                   var callsign = $("#indicativo").val();
-                   var positions = loadTrack(callsign);
-                   var lastTime = foo.entries[0].lasttime;
-                   if (!positions.length || positions[positions.length - 1].t !== lastTime) {
-                       positions.push({t: lastTime, lat: $lat, lng: $lng, alt: foo.entries[0].altitude});
-                       saveTrack(callsign, positions);
-                   }
-
-                   // Draw historical track in purple
-                   try { map.removeLayer(history_poly); } catch(e) {}
-                   if (positions.length > 1) {
-                       var latlngs = positions.map(function(p) { return [p.lat, p.lng]; });
-                       history_poly = L.polyline(latlngs, {color: '#9c27b0', weight: 3}).addTo(map);
-                   }
-                   $('#track-info').text(callsign + ' — ' + positions.length + ' punto' + (positions.length !== 1 ? 's' : ''));
-
-                   $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + callsign + ")");
-                   simula(globo_position);
+                   var $fecha = new Date();
+                   $fecha.setTime(foo.entries[0].lasttime * 1000);
+                   actualizaGlobo(
+                       callsign,
+                       foo.entries[0].lat,
+                       foo.entries[0].lng,
+                       foo.entries[0].altitude,
+                       $fecha,
+                       foo.entries[0].comment.replace(/,/g, ', ')
+                   );
                },
             });
+        };
+
+        function recarga_ttn(dev_id) {
+            // Always go through the server-side proxy: the Storage Integration
+            // (full decoded payload) needs the secret API key, and ttn.php also
+            // owns the TTN Mapper fallback when storage has no data yet.
+            $.ajax({
+                url: "ttn.php?dev_id=" + encodeURIComponent(dev_id),
+                type: "GET",
+                dataType: "json",
+                success: function(data) { procesaTTN(dev_id, data); }
+            });
+        };
+
+        function procesaTTN(dev_id, p) {
+            if (!p || p.latitude == null) { console.log("No TTN data for " + dev_id); return; }
+
+            // Build the data string from whatever fields are present.
+            var parts = [];
+            if (p.altitude != null)     parts.push('Alt: ' + Math.round(p.altitude) + 'm');
+            if (p.temperature != null)  parts.push('Temp: ' + p.temperature + '°C');
+            if (p.digitals && p.digitals.length) {
+                p.digitals.forEach(function(d, i) {
+                    parts.push('Out' + (i + 1) + ': ' + d.value);
+                });
+            }
+            if (p.rssi != null)         parts.push('RSSI: ' + p.rssi);
+            if (p.satellites != null)   parts.push('Sats: ' + p.satellites);
+
+            actualizaGlobo(
+                dev_id,
+                p.latitude,
+                p.longitude,
+                p.altitude,
+                new Date(p.time),
+                parts.join(' | ')
+            );
+        };
+
+        // Shared: update overlay, balloon marker, stored track and prediction.
+        function actualizaGlobo(label, lat, lng, alt, fecha, datos) {
+            var storeKey = $("#indicativo").val();   // stable key for track storage
+            $(".distintivo").text(label);
+            $(".tiempo").text(fecha.toLocaleString('en-GB'));
+            $(".datos").text(datos);
+            url = "https://osmand.net/go?lat=" + lat + "&lon=" + lng;
+            $(".globo").text(url);
+            $(".globo").attr("href", url);
+            $lat = lat;
+            $lng = lng;
+            globo_position = [lat, lng, alt];
+
+            // Update or create the balloon marker
+            var globoIcon = new L.Icon({iconUrl: 'globo.png', iconSize: [25, 53], iconAnchor: [12, 53]});
+            if (globo_marker) {
+                globo_marker.setLatLng([$lat, $lng]);
+            } else {
+                globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
+            }
+
+            // Store position in localStorage (deduplicate by timestamp)
+            var positions = loadTrack(storeKey);
+            var lastTime = Math.round(fecha.getTime() / 1000);
+            if (!positions.length || positions[positions.length - 1].t !== lastTime) {
+                positions.push({t: lastTime, lat: $lat, lng: $lng, alt: alt});
+                saveTrack(storeKey, positions);
+            }
+
+            // Draw historical track in purple
+            try { map.removeLayer(history_poly); } catch(e) {}
+            if (positions.length > 1) {
+                var latlngs = positions.map(function(p) { return [p.lat, p.lng]; });
+                history_poly = L.polyline(latlngs, {color: '#9c27b0', weight: 3}).addTo(map);
+            }
+            $('#track-info').text(label + ' — ' + positions.length + ' punto' + (positions.length !== 1 ? 's' : ''));
+
+            $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + label + ")");
+            simula(globo_position);
         };
 
         function llevame() {
