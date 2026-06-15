@@ -14,4 +14,25 @@
     global $TtnRegion;
     # TTN cluster/region host prefix (eu1, nam1, au1, ...)
     $TtnRegion = 'eu1';
+
+    global $TtnApps;
+    # Multi-application config for ttn.php. One entry per TTN application:
+    #   app_id  : TTN application id
+    #   key     : API key with RIGHT_APPLICATION_TRAFFIC_READ
+    #   region  : cluster host prefix (eu1, nam1, au1, ...)
+    #   schema  : payload decoder — 'cayenne' (gps_N/temperature_N/digital_out_N)
+    #             or 'servet' (type 1 = GPS, type 2 = sensors)
+    #   devices : device_ids that belong to this application
+    $TtnApps = [
+        [
+            'app_id'  => $TtnAppId,
+            'key'     => $TtnApiKey,
+            'region'  => $TtnRegion,
+            'schema'  => 'cayenne',
+            'devices' => ['CHANGE ME!'],
+        ],
+        // Add more applications here, e.g.:
+        // [ 'app_id' => 'CHANGE ME!', 'key' => 'CHANGE ME!', 'region' => 'eu1',
+        //   'schema' => 'servet', 'devices' => ['CHANGE ME!'] ],
+    ];
 ?>

@@ -152,6 +152,10 @@
                     <option value="TTN:eui-70b3d57ed0061c44">#2 &mdash; eui-70b3d57ed0061c44</option>
                     <option value="TTN:eui-70b3d57ed0061c47">#3 &mdash; eui-70b3d57ed0061c47</option>
                 </optgroup>
+                <optgroup label="TTN KTM">
+                    <option value="TTN:servet-ttnmapper-1">servet-ttnmapper-1</option>
+                    <option value="TTN:servet-ttnmapper-2">servet-ttnmapper-2</option>
+                </optgroup>
             </select>
             <button onclick="recarga()">⟳ Reload</button>
             <button id="btn-settings" onclick="openSettings()"><svg width="22" height="22" viewBox="0 0 24 24" fill="#1a73e8" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.96s-.03-.66-.07-1l2.05-1.63c.18-.14.23-.41.12-.62l-1.95-3.37c-.12-.22-.37-.3-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.9c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.62l2.05 1.63c-.04.34-.07.67-.07 1s.03.65.07.99L2.86 14.74c-.18.14-.23.41-.12.62l1.95 3.37c.12.22.37.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.24.41.48.41h3.9c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.95-3.37c.12-.21.07-.47-.12-.62l-2.01-1.58z"/></svg></button>
@@ -402,17 +406,17 @@ let textbox_eta = L.Control.extend({
         function procesaTTN(dev_id, p) {
             if (!p || p.latitude == null) { console.log("No TTN data for " + dev_id); return; }
 
-            // Build the data string from whatever fields are present.
-            var parts = [];
-            if (p.altitude != null)     parts.push('Alt: ' + Math.round(p.altitude) + 'm');
-            if (p.temperature != null)  parts.push('Temp: ' + p.temperature + '°C');
-            if (p.digitals && p.digitals.length) {
-                p.digitals.forEach(function(d, i) {
-                    parts.push('Out' + (i + 1) + ': ' + d.value);
-                });
+            // ttn.php returns a pre-ordered display list (works for every schema).
+            var datos;
+            if (p.fields && p.fields.length) {
+                datos = p.fields.map(function(f) { return f.label + ': ' + f.value; }).join(' | ');
+            } else {
+                var parts = [];
+                if (p.altitude != null)    parts.push('Alt: ' + Math.round(p.altitude) + 'm');
+                if (p.temperature != null) parts.push('Temp: ' + p.temperature + '°C');
+                if (p.satellites != null)  parts.push('Sats: ' + p.satellites);
+                datos = parts.join(' | ');
             }
-            if (p.rssi != null)         parts.push('RSSI: ' + p.rssi);
-            if (p.satellites != null)   parts.push('Sats: ' + p.satellites);
 
             actualizaGlobo(
                 dev_id,
@@ -420,7 +424,7 @@ let textbox_eta = L.Control.extend({
                 p.longitude,
                 p.altitude,
                 new Date(p.time),
-                parts.join(' | ')
+                datos
             );
         };
 
