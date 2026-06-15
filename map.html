@@ -445,21 +445,29 @@ let textbox_eta = L.Control.extend({
                 globo_marker = L.marker([$lat, $lng], {icon: globoIcon}).addTo(map);
             }
 
-            // Store position in localStorage (deduplicate by timestamp)
-            var positions = loadTrack(storeKey);
-            var lastTime = Math.round(fecha.getTime() / 1000);
-            if (!positions.length || positions[positions.length - 1].t !== lastTime) {
-                positions.push({t: lastTime, lat: $lat, lng: $lng, alt: alt});
-                saveTrack(storeKey, positions);
-            }
+            // Stored track + history polyline. Fully guarded: a corrupt
+            // localStorage entry must never block the prediction/routing below.
+            try {
+                var positions = loadTrack(storeKey);
+                var last = positions[positions.length - 1];
+                var lastTime = Math.round(fecha.getTime() / 1000);
+                if (!positions.length || !last || last.t !== lastTime) {
+                    positions.push({t: lastTime, lat: $lat, lng: $lng, alt: alt});
+                    saveTrack(storeKey, positions);
+                }
 
-            // Draw historical track in purple
-            try { map.removeLayer(history_poly); } catch(e) {}
-            if (positions.length > 1) {
-                var latlngs = positions.map(function(p) { return [p.lat, p.lng]; });
-                history_poly = L.polyline(latlngs, {color: '#9c27b0', weight: 3}).addTo(map);
+                // Draw historical track in purple (skip invalid points)
+                try { map.removeLayer(history_poly); } catch(e) {}
+                var latlngs = positions
+                    .map(function(p) { return p ? [parseFloat(p.lat), parseFloat(p.lng)] : [NaN, NaN]; })
+                    .filter(function(ll) { return isFinite(ll[0]) && isFinite(ll[1]); });
+                if (latlngs.length > 1) {
+                    history_poly = L.polyline(latlngs, {color: '#9c27b0', weight: 3}).addTo(map);
+                }
+                $('#track-info').text(label + ' — ' + positions.length + ' punto' + (positions.length !== 1 ? 's' : ''));
+            } catch (e) {
+                console.log('track render error (ignored)', e);
             }
-            $('#track-info').text(label + ' — ' + positions.length + ' punto' + (positions.length !== 1 ? 's' : ''));
 
             $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + label + ")");
             simula(globo_position);
