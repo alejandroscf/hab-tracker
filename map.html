@@ -264,7 +264,8 @@
                 if (!key.startsWith('hab_track_')) return;
                 try {
                     var positions = JSON.parse(localStorage.getItem(key) || '[]');
-                    if (positions.length && new Date(positions[0].t).getTime() < cutoff) {
+                    // positions[].t is stored in seconds; cutoff is in ms.
+                    if (positions.length && positions[0].t * 1000 < cutoff) {
                         localStorage.removeItem(key);
                     }
                 } catch(e) { localStorage.removeItem(key); }
