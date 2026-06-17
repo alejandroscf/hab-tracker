@@ -243,14 +243,28 @@
         var refresh_interval_id;
 
         function trackKey(callsign) {
-            var d = new Date();
-            var dateStr = d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
-            return 'hab_track_' + callsign + '_' + dateStr;
+            // One persistent bucket per callsign. No date in the key: a date-keyed
+            // bucket rolls over at local midnight, which makes the track vanish
+            // mid-flight. Old points are trimmed by age in pruneOldTracks instead.
+            return 'hab_track_' + callsign;
         }
 
         function loadTrack(callsign) {
             try {
-                return JSON.parse(localStorage.getItem(trackKey(callsign)) || '[]');
+                var raw = localStorage.getItem(trackKey(callsign));
+                if (raw !== null) return JSON.parse(raw || '[]');
+                // One-time migration: fold any old date-keyed buckets
+                // (hab_track_<callsign>_<date>) into the persistent key.
+                var prefix = 'hab_track_' + callsign + '_';
+                var merged = [];
+                Object.keys(localStorage).forEach(function(key) {
+                    if (key.indexOf(prefix) !== 0) return;
+                    try { merged = merged.concat(JSON.parse(localStorage.getItem(key) || '[]')); } catch(e) {}
+                    localStorage.removeItem(key);
+                });
+                merged.sort(function(a, b) { return (a && a.t || 0) - (b && b.t || 0); });
+                if (merged.length) saveTrack(callsign, merged);
+                return merged;
             } catch(e) { return []; }
         }
 
@@ -264,9 +278,14 @@
                 if (!key.startsWith('hab_track_')) return;
                 try {
                     var positions = JSON.parse(localStorage.getItem(key) || '[]');
+                    // Drop points older than 48h; keep the rest so an active track
+                    // isn't wiped just because its first point has aged out.
                     // positions[].t is stored in seconds; cutoff is in ms.
-                    if (positions.length && positions[0].t * 1000 < cutoff) {
+                    var kept = positions.filter(function(p) { return p && p.t * 1000 >= cutoff; });
+                    if (!kept.length) {
                         localStorage.removeItem(key);
+                    } else if (kept.length !== positions.length) {
+                        localStorage.setItem(key, JSON.stringify(kept));
                     }
                 } catch(e) { localStorage.removeItem(key); }
             });
