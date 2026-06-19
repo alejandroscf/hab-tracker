@@ -361,8 +361,8 @@ let textbox_eta = L.Control.extend({
         });
         new textbox_eta({ position: 'topright' }).addTo(map);
 
-        /* Rectángulo límites */
-        var bounds = [[41.48937,-0.53218], [40.871279,-1.381347]];
+        /* Rectángulo límites (geofence) */
+        var bounds = [[41.76, -0.15881807493463482], [41.234170838355354, -0.766586054537814]];
         L.rectangle(bounds, {fill:false, color: "#ff7800", weight: 2}).addTo(map);
 
         refresh_interval_id = setInterval(function () { recarga(); }, 1000 * parseInt($("#refresh_interval").val()));
