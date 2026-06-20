@@ -132,7 +132,8 @@
             background: rgba(0,0,0,0.72); color: #25e025;
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 11px; line-height: 1.45; padding: 6px 8px;
-            border-radius: 6px; max-width: 62vw; white-space: nowrap;
+            border-radius: 6px; max-width: 62vw;
+            white-space: normal; overflow-wrap: anywhere;
             pointer-events: none; display: none;
         }
     </style>
@@ -375,19 +376,42 @@
             return null;
         }
 
-        // Min distance (m) from a point to the route polyline (projected pixels).
+        // Great-circle distance (m) between two points. Self-contained (this
+        // Leaflet build has no map.distance). Accepts [lat,lng] arrays or LatLng.
+        function geoDist(a, b) {
+            if (!a || !b) return Infinity;
+            function la(p) { return Array.isArray(p) ? +p[0] : +p.lat; }
+            function lo(p) { return Array.isArray(p) ? +p[1] : +p.lng; }
+            var R = 6371000, toR = Math.PI / 180;
+            var dLat = (la(b) - la(a)) * toR, dLng = (lo(b) - lo(a)) * toR;
+            var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(la(a) * toR) * Math.cos(la(b) * toR) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+        }
+
+        // Min distance (m) from a point to the route polyline. Self-contained
+        // (equirectangular projection in metres) so it never throws and doesn't
+        // depend on the map's pixel-projection state. Accepts [lat,lng] arrays
+        // or Leaflet LatLng objects for either argument.
         function distToRoute(latlng, latlngs) {
-            if (!latlngs || latlngs.length < 2) return Infinity;
-            var p = map.latLngToLayerPoint(latlng);
-            var min = Infinity;
+            if (!latlng || !latlngs || latlngs.length < 2) return Infinity;
+            function la(p) { return Array.isArray(p) ? +p[0] : +p.lat; }
+            function lo(p) { return Array.isArray(p) ? +p[1] : +p.lng; }
+            var mLat = 111320, mLng = 111320 * Math.cos(la(latlng) * Math.PI / 180);
+            function xy(p) { return [lo(p) * mLng, la(p) * mLat]; }
+            var P = xy(latlng), min2 = Infinity;
             for (var i = 1; i < latlngs.length; i++) {
-                var a = map.latLngToLayerPoint(latlngs[i - 1]);
-                var b = map.latLngToLayerPoint(latlngs[i]);
-                var cp = L.LineUtil.closestPointOnSegment(p, a, b);
-                var d = map.distance(latlng, map.layerPointToLatLng(cp));
-                if (d < min) min = d;
+                var a = xy(latlngs[i - 1]), b = xy(latlngs[i]);
+                var dx = b[0] - a[0], dy = b[1] - a[1];
+                var dot = dx * dx + dy * dy;
+                var t = dot > 0 ? ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / dot : 0;
+                t = t < 0 ? 0 : t > 1 ? 1 : t;
+                var ex = P[0] - (a[0] + t * dx), ey = P[1] - (a[1] + t * dy);
+                var d2 = ex * ex + ey * ey;       // compare squared; sqrt once at the end
+                if (d2 < min2) min2 = d2;
             }
-            return min;
+            return Math.sqrt(min2);
         }
 
         // Decide whether a fresh route is warranted, and request it if so.
@@ -401,7 +425,7 @@
                 updateDebug(); return;
             }
 
-            var goalMoved = last_routed_dest ? map.distance(dest, last_routed_dest) : Infinity;
+            var goalMoved = last_routed_dest ? geoDist(dest, last_routed_dest) : Infinity;
             var offRoute  = distToRoute(my_position, current_route_latlngs);
             var reason = force ? 'forced'
                 : !last_routed_dest ? 'first route'
@@ -477,24 +501,29 @@
             if (!el) return;
             if (!debugOn()) { el.style.display = 'none'; return; }
             el.style.display = 'block';
-            var dest = activeDest();
-            var off  = (my_position && current_route_latlngs)
-                ? Math.round(distToRoute(my_position, current_route_latlngs)) + 'm' : '-';
-            var moved = (dest && last_routed_dest)
-                ? Math.round(map.distance(dest, last_routed_dest)) + 'm' : '-';
-            var rows = [
-                'dev: ' + ($("#indicativo").val() || '-'),
-                'dest: ' + (($("input[name=destino]:checked").val() || '-').replace('dest_', '')),
-                'car: ' + fmtLL(my_position),
-                'goal: ' + fmtLL(dest),
-                'route pts: ' + (current_route_latlngs ? current_route_latlngs.length : 0),
-                'off-route: ' + off + ' / ' + CAR_DEVIATION_M + 'm',
-                'goal moved: ' + moved + ' / ' + GOAL_MOVE_M + 'm',
-                'since route: ' + (last_route_ts ? Math.round((Date.now() - last_route_ts) / 1000) + 's' : '-'),
-                'api today: ' + ghReqCount(),
-                'status: ' + last_reroute_info
-            ];
-            el.innerHTML = rows.join('<br>');
+            try {
+                var dest = activeDest();
+                var off  = (my_position && current_route_latlngs)
+                    ? Math.round(distToRoute(my_position, current_route_latlngs)) + 'm' : '-';
+                var moved = (dest && last_routed_dest)
+                    ? Math.round(geoDist(dest, last_routed_dest)) + 'm' : '-';
+                var rows = [
+                    'dev: ' + ($("#indicativo").val() || '-'),
+                    'dest: ' + (($("input[name=destino]:checked").val() || '-').replace('dest_', '')),
+                    'car: ' + fmtLL(my_position),
+                    'goal: ' + fmtLL(dest),
+                    'route pts: ' + (current_route_latlngs ? current_route_latlngs.length : 0),
+                    'off-route: ' + off + ' / ' + CAR_DEVIATION_M + 'm',
+                    'goal moved: ' + moved + ' / ' + GOAL_MOVE_M + 'm',
+                    'since route: ' + (last_route_ts ? Math.round((Date.now() - last_route_ts) / 1000) + 's' : '-'),
+                    'api today: ' + ghReqCount(),
+                    'status: ' + last_reroute_info
+                ];
+                el.innerHTML = rows.join('<br>');
+            } catch (e) {
+                el.innerHTML = 'debug error: ' + e;
+                console.warn('updateDebug error', e);
+            }
         }
         // Keep the timer/age fields fresh even between GPS/refresh events.
         setInterval(function () { if (debugOn()) updateDebug(); }, 1000);
