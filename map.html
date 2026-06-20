@@ -126,6 +126,15 @@
             background: rgba(0,0,0,0.1); border-radius: 8px;
             padding: 4px 8px; margin-top: 4px;
         }
+        /* Debug overlay: developer readout, toggled from the settings drawer */
+        #debug_text {
+            position: fixed; top: 8px; left: 52px; z-index: 1001;
+            background: rgba(0,0,0,0.72); color: #25e025;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 11px; line-height: 1.45; padding: 6px 8px;
+            border-radius: 6px; max-width: 62vw; white-space: nowrap;
+            pointer-events: none; display: none;
+        }
     </style>
 </head>
 <body>
@@ -138,6 +147,9 @@
         <h2><span class="distintivo"></span>: <span class="tiempo"></span></h2>
         <h3>Data: <span class="datos"></span></h3>
     </div>
+
+    <!-- Debug overlay: toggled from the settings drawer -->
+    <div id="debug_text"></div>
 
     <!-- Quick bar: always visible -->
     <div id="quick-bar">
@@ -186,6 +198,9 @@
             <span>Intervalo de actualización (s)</span>
             <input type="text" id="refresh_interval" name="refresh_interval" value="30" onchange="set_interval()">
         </div>
+
+        <h3>Debug</h3>
+        <label><input type="checkbox" id="dbg_toggle" onchange="updateDebug()"> Mostrar info de depuración (routing)</label>
 
         <h3>Simulación</h3>
         <label><input type="checkbox" id="bajando" value="bajando" onchange="recarga()"> Simula caída</label>
@@ -350,6 +365,7 @@
         var current_route_latlngs = null;  // points of the active route
         var last_routed_dest = null;       // [lat,lng] goal used for the active route
         var last_route_ts = 0;
+        var last_reroute_info = 'idle';    // last decision, for the debug overlay
 
         // The active destination [lat,lng] per the destino radio, or null (No calc).
         function activeDest() {
@@ -376,21 +392,33 @@
 
         // Decide whether a fresh route is warranted, and request it if so.
         function maybeReroute(force) {
-            if (my_position === undefined) return;
+            if (my_position === undefined) { last_reroute_info = 'no GPS'; updateDebug(); return; }
             var dest = activeDest();
-            if (!dest) return;                                   // No calc → never route
-            if (!force && Date.now() - last_route_ts < ROUTE_FLOOR_MS) return;
+            if (!dest) { last_reroute_info = 'no destination'; updateDebug(); return; }
+            var sinceFloor = Date.now() - last_route_ts;
+            if (!force && sinceFloor < ROUTE_FLOOR_MS) {
+                last_reroute_info = 'floor ' + Math.round((ROUTE_FLOOR_MS - sinceFloor) / 1000) + 's';
+                updateDebug(); return;
+            }
 
-            var need = force
-                || !last_routed_dest
-                || !current_route_latlngs
-                || map.distance(dest, last_routed_dest) > GOAL_MOVE_M
-                || distToRoute(my_position, current_route_latlngs) > CAR_DEVIATION_M;
-            if (!need) return;
+            var goalMoved = last_routed_dest ? map.distance(dest, last_routed_dest) : Infinity;
+            var offRoute  = distToRoute(my_position, current_route_latlngs);
+            var reason = force ? 'forced'
+                : !last_routed_dest ? 'first route'
+                : !current_route_latlngs ? 'no geometry'
+                : goalMoved > GOAL_MOVE_M ? 'goal moved ' + Math.round(goalMoved) + 'm'
+                : offRoute > CAR_DEVIATION_M ? 'off-route ' + Math.round(offRoute) + 'm'
+                : null;
+            if (!reason) {
+                last_reroute_info = 'on route (off ' + Math.round(offRoute) + 'm)';
+                updateDebug(); return;
+            }
 
             last_route_ts = Date.now();
             last_routed_dest = [dest[0], dest[1]];
+            last_reroute_info = 'routed: ' + reason;
             llevame_dest(dest);
+            updateDebug();
         }
 
         map.on('locationfound', function(e) {
@@ -412,10 +440,64 @@
             if (!activeDest()) {
                 try { map.removeLayer(track); } catch (e) {}
                 $('.eta_coche').text('');
+                last_reroute_info = 'no destination';
+                updateDebug();
                 return;
             }
             maybeReroute(true);
         }
+
+        // ---- Debug overlay (toggled from the drawer) ----------------------
+        function debugOn() {
+            var t = document.getElementById('dbg_toggle');
+            return !!(t && t.checked);
+        }
+        function fmtLL(p) {
+            return p ? (Number(p[0]).toFixed(5) + ', ' + Number(p[1]).toFixed(5)) : '-';
+        }
+        // Count of GraphHopper requests today (local date), persisted across
+        // reloads. The date in the key makes it reset on its own at midnight.
+        function ghReqKey() {
+            var d = new Date();
+            return 'gh_reqs_' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+        }
+        function ghReqCount() {
+            return parseInt(localStorage.getItem(ghReqKey()) || '0', 10) || 0;
+        }
+        function ghReqInc() {
+            try {
+                localStorage.setItem(ghReqKey(), String(ghReqCount() + 1));
+                Object.keys(localStorage).forEach(function (k) {   // drop other days
+                    if (k.indexOf('gh_reqs_') === 0 && k !== ghReqKey()) localStorage.removeItem(k);
+                });
+            } catch (e) {}
+        }
+        function updateDebug() {
+            var el = document.getElementById('debug_text');
+            if (!el) return;
+            if (!debugOn()) { el.style.display = 'none'; return; }
+            el.style.display = 'block';
+            var dest = activeDest();
+            var off  = (my_position && current_route_latlngs)
+                ? Math.round(distToRoute(my_position, current_route_latlngs)) + 'm' : '-';
+            var moved = (dest && last_routed_dest)
+                ? Math.round(map.distance(dest, last_routed_dest)) + 'm' : '-';
+            var rows = [
+                'dev: ' + ($("#indicativo").val() || '-'),
+                'dest: ' + (($("input[name=destino]:checked").val() || '-').replace('dest_', '')),
+                'car: ' + fmtLL(my_position),
+                'goal: ' + fmtLL(dest),
+                'route pts: ' + (current_route_latlngs ? current_route_latlngs.length : 0),
+                'off-route: ' + off + ' / ' + CAR_DEVIATION_M + 'm',
+                'goal moved: ' + moved + ' / ' + GOAL_MOVE_M + 'm',
+                'since route: ' + (last_route_ts ? Math.round((Date.now() - last_route_ts) / 1000) + 's' : '-'),
+                'api today: ' + ghReqCount(),
+                'status: ' + last_reroute_info
+            ];
+            el.innerHTML = rows.join('<br>');
+        }
+        // Keep the timer/age fields fresh even between GPS/refresh events.
+        setInterval(function () { if (debugOn()) updateDebug(); }, 1000);
 
 let textbox_eta = L.Control.extend({
             onAdd: function() {
@@ -569,6 +651,7 @@ let textbox_eta = L.Control.extend({
              if (xhr_llevame) { xhr_llevame.abort(); }
              var point1 = "" + my_position[0] + "," + my_position[1];
              var point2 = "" + dest[0] + "," + dest[1];
+             ghReqInc();   // count this GraphHopper request against today's quota
              xhr_llevame = $.ajax({
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
                 // Previous key (quota-exhausted 2026-06; swap back here if needed):
