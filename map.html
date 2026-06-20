@@ -162,13 +162,13 @@
         </div>
         <div class="row">
             <div class="dest-group">
-                <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga()">
+                <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga(); forceRoute()">
                 <label for="dest_nada">✖ No calc</label>
 
-                <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga()">
+                <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga(); forceRoute()">
                 <label for="dest_globo">🎈 Globo</label>
 
-                <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga()">
+                <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga(); forceRoute()">
                 <label for="dest_meta">🏁 Meta</label>
             </div>
         </div>
@@ -340,6 +340,10 @@
         }).addTo(map);
         lc.start();
 
+        // Routing throttle: locationfound fires ~once/second while following GPS,
+        // and each llevame() is a GraphHopper request. Route at most once per 30s.
+        var ROUTE_MIN_INTERVAL = 30000;
+        var last_route_ts = 0;
         map.on('locationfound', function(e) {
             my_position = [e.latlng.lat, e.latlng.lng];
             if (my_marker) {
@@ -348,8 +352,18 @@
                 var carIcon = L.divIcon({html: '🚗', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14]});
                 my_marker = L.marker(my_position, {icon: carIcon}).addTo(map);
             }
-            llevame();
+            if (Date.now() - last_route_ts >= ROUTE_MIN_INTERVAL) {
+                last_route_ts = Date.now();
+                llevame();
+            }
         });
+
+        // Force an immediate route now and restart the 30s window. Used when the
+        // destination changes so switching target re-routes without waiting.
+        function forceRoute() {
+            last_route_ts = Date.now();
+            llevame();
+        }
 
 let textbox_eta = L.Control.extend({
             onAdd: function() {
