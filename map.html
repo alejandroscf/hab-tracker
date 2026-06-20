@@ -162,13 +162,13 @@
         </div>
         <div class="row">
             <div class="dest-group">
-                <input type="radio" id="dest_nada" name="destino" value="dest_nada" onchange="recarga(); forceRoute()">
+                <input type="radio" id="dest_nada" name="destino" value="dest_nada" checked onchange="recarga(); forceRoute()">
                 <label for="dest_nada">✖ No calc</label>
 
                 <input type="radio" id="dest_globo" name="destino" value="dest_globo" onchange="recarga(); forceRoute()">
                 <label for="dest_globo">🎈 Globo</label>
 
-                <input type="radio" id="dest_meta" name="destino" value="dest_meta" checked onchange="recarga(); forceRoute()">
+                <input type="radio" id="dest_meta" name="destino" value="dest_meta" onchange="recarga(); forceRoute()">
                 <label for="dest_meta">🏁 Meta</label>
             </div>
         </div>
@@ -340,10 +340,59 @@
         }).addTo(map);
         lc.start();
 
-        // Routing throttle: locationfound fires ~once/second while following GPS,
-        // and each llevame() is a GraphHopper request. Route at most once per 30s.
-        var ROUTE_MIN_INTERVAL = 30000;
+        // ---- Deviation-based re-routing -----------------------------------
+        // Only call GraphHopper when it matters: the car drifts off the planned
+        // route, the goal moves, or the destination type is switched. A car that
+        // stays on-route makes no requests, so we barely touch the daily quota.
+        var CAR_DEVIATION_M = 80;     // re-route if the car strays this far off-route
+        var GOAL_MOVE_M     = 100;    // re-route if the goal moves this far since last route
+        var ROUTE_FLOOR_MS  = 5000;   // anti-hammer: at most one re-route per 5s
+        var current_route_latlngs = null;  // points of the active route
+        var last_routed_dest = null;       // [lat,lng] goal used for the active route
         var last_route_ts = 0;
+
+        // The active destination [lat,lng] per the destino radio, or null (No calc).
+        function activeDest() {
+            var v = $("input[name=destino]:checked").val();
+            if (v === 'dest_globo') return globo_position;
+            if (v === 'dest_meta')  return finish_position;
+            return null;
+        }
+
+        // Min distance (m) from a point to the route polyline (projected pixels).
+        function distToRoute(latlng, latlngs) {
+            if (!latlngs || latlngs.length < 2) return Infinity;
+            var p = map.latLngToLayerPoint(latlng);
+            var min = Infinity;
+            for (var i = 1; i < latlngs.length; i++) {
+                var a = map.latLngToLayerPoint(latlngs[i - 1]);
+                var b = map.latLngToLayerPoint(latlngs[i]);
+                var cp = L.LineUtil.closestPointOnSegment(p, a, b);
+                var d = map.distance(latlng, map.layerPointToLatLng(cp));
+                if (d < min) min = d;
+            }
+            return min;
+        }
+
+        // Decide whether a fresh route is warranted, and request it if so.
+        function maybeReroute(force) {
+            if (my_position === undefined) return;
+            var dest = activeDest();
+            if (!dest) return;                                   // No calc → never route
+            if (!force && Date.now() - last_route_ts < ROUTE_FLOOR_MS) return;
+
+            var need = force
+                || !last_routed_dest
+                || !current_route_latlngs
+                || map.distance(dest, last_routed_dest) > GOAL_MOVE_M
+                || distToRoute(my_position, current_route_latlngs) > CAR_DEVIATION_M;
+            if (!need) return;
+
+            last_route_ts = Date.now();
+            last_routed_dest = [dest[0], dest[1]];
+            llevame_dest(dest);
+        }
+
         map.on('locationfound', function(e) {
             my_position = [e.latlng.lat, e.latlng.lng];
             if (my_marker) {
@@ -352,17 +401,20 @@
                 var carIcon = L.divIcon({html: '🚗', className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14]});
                 my_marker = L.marker(my_position, {icon: carIcon}).addTo(map);
             }
-            if (Date.now() - last_route_ts >= ROUTE_MIN_INTERVAL) {
-                last_route_ts = Date.now();
-                llevame();
-            }
+            maybeReroute();
         });
 
-        // Force an immediate route now and restart the 30s window. Used when the
-        // destination changes so switching target re-routes without waiting.
+        // Destination changed via the radios: route immediately to the new target,
+        // or clear the route line when switching to "No calc".
         function forceRoute() {
-            last_route_ts = Date.now();
-            llevame();
+            current_route_latlngs = null;
+            last_routed_dest = null;
+            if (!activeDest()) {
+                try { map.removeLayer(track); } catch (e) {}
+                $('.eta_coche').text('');
+                return;
+            }
+            maybeReroute(true);
         }
 
 let textbox_eta = L.Control.extend({
@@ -509,15 +561,8 @@ let textbox_eta = L.Control.extend({
 
             $(".globo-geo").attr("href", "geo:" + $lat + "," + $lng + "?q=" + $lat + "," + $lng + "(" + label + ")");
             simula(globo_position);
+            maybeReroute();   // dest = Globo: re-route if the balloon moved past the threshold
         };
-
-        function llevame() {
-          if ( $("input[name=destino]:checked").val() == 'dest_globo' ){
-             llevame_dest(globo_position);
-          } else if ( $("input[name=destino]:checked").val() == 'dest_meta' ){
-             llevame_dest(finish_position);
-          }
-        }
 
         function llevame_dest(dest) {
           if (my_position !== undefined) {
@@ -526,13 +571,21 @@ let textbox_eta = L.Control.extend({
              var point2 = "" + dest[0] + "," + dest[1];
              xhr_llevame = $.ajax({
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
+                // Previous key (quota-exhausted 2026-06; swap back here if needed):
+                // key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"
                 data: {point: point2, type: "gpx", key: "f33b3dce-5c96-4104-99e0-7e6c1ed0bd0a"},
                 type: "GET",
                 success: function (gpx_track) {
                    try { map.removeLayer(track); } catch(e) {}
                    track = omnivore.gpx.parse(gpx_track)
                    track.addTo(map);
+                   current_route_latlngs = [];
                    track.eachLayer(function(layer){
+                      if (layer.getLatLngs) {
+                         var lls = layer.getLatLngs();
+                         var flat = (lls.length && Array.isArray(lls[0])) ? [].concat.apply([], lls) : lls;
+                         current_route_latlngs = current_route_latlngs.concat(flat);
+                      }
                       if (layer.feature && layer.feature.properties && layer.feature.properties.coordTimes) {
                          first_point_c = layer.feature.properties.coordTimes.at(0);
                          last_point_c = layer.feature.properties.coordTimes.at(-1);
@@ -600,6 +653,7 @@ let textbox_eta = L.Control.extend({
                  $(".meta-geo").attr("href", "geo:" + finish_position[0] + "," + finish_position[1] + "?q=" + finish_position[0] + "," + finish_position[1] + "(Meta)");
                  $("#button_llevame_meta").prop('disabled', false);
                  $(".eta_globo").text(eta_globo);
+                 maybeReroute();   // dest = Meta: re-route if the landing prediction moved past the threshold
               }
            );
         };
