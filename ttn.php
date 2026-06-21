@@ -1,5 +1,6 @@
 <?php
 require_once 'settings.php';
+require_once 'cache.php';
 
 $dev_id = $_GET['dev_id'] ?? '';
 $dev_id = preg_replace('/[^a-zA-Z0-9\-]/', '', $dev_id);
@@ -22,6 +23,7 @@ if ($result === null) {
     $result = ttn_mapper($dev_id);
 }
 
+cache_send_headers();   // X-Cache: HIT|MISS|STALE for the debug overlay
 echo ($result !== null) ? json_encode($result) : '{}';
 exit;
 
@@ -58,8 +60,10 @@ function ttn_storage_fetch($app, $dev_id, $limit) {
         'timeout'       => 12,
         'ignore_errors' => true,
     ]]);
-    $body = @file_get_contents($url, false, $ctx);
-    if ($body === false || trim($body) === '') { return []; }
+    // Shared cache: one upstream fetch per app/device/limit per TTL, across clients.
+    $body = cached_fetch("ttn_{$app['app_id']}_{$dev_id}_{$limit}", api_cache_ttl(),
+        function () use ($url, $ctx) { return @file_get_contents($url, false, $ctx); });
+    if ($body === false || $body === null || trim($body) === '') { return []; }
 
     $out = [];
     foreach (explode("\n", $body) as $line) {
@@ -201,8 +205,9 @@ function ttn_mapper($dev_id) {
         'header'  => "User-Agent: Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36\r\nAccept: application/json\r\nReferer: https://ttnmapper.org/\r\n",
         'timeout' => 10,
     ]]);
-    $body = @file_get_contents($url, false, $ctx);
-    if ($body === false) { return null; }
+    $body = cached_fetch("ttnmapper_{$dev_id}", api_cache_ttl(),
+        function () use ($url, $ctx) { return @file_get_contents($url, false, $ctx); });
+    if ($body === false || $body === null) { return null; }
 
     $data = json_decode($body, true);
     if (!is_array($data) || !count($data)) { return null; }

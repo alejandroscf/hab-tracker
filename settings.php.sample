@@ -3,6 +3,10 @@
     # API key of APRS.FI
     $AprsFiKey = 'CHANGE ME!';
 
+    global $ApiCacheTtl;
+    # Seconds to cache upstream aprs.fi / TTN responses (shared across clients). Default 15.
+    $ApiCacheTtl = 15;
+
     global $TtnApiKey;
     # API key for The Things Network Storage Integration (RIGHT_APPLICATION_TRAFFIC_READ)
     $TtnApiKey = 'CHANGE ME!';

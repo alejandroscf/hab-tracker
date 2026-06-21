@@ -640,6 +640,21 @@
                 });
             } catch (e) {}
         }
+        // Server cache status from the last proxy responses (X-Cache headers):
+        // posCache = aprs.fi/TTN position fetch; predCache = SondeHub prediction.
+        var posCache  = { status: '-', age: null, ttl: null };
+        var predCache = { status: '-', age: null, ttl: null };
+        function readCacheHeaders(xhr, into) {
+            if (!xhr || !xhr.getResponseHeader) return;
+            var s = xhr.getResponseHeader('X-Cache');
+            if (!s) return;
+            into.status = s;
+            into.age = xhr.getResponseHeader('X-Cache-Age');
+            into.ttl = xhr.getResponseHeader('X-Cache-TTL');
+        }
+        function fmtCache(c) {
+            return c.status + (c.age != null ? ' ' + c.age + 's/' + (c.ttl || '?') + 's' : '');
+        }
         function updateDebug() {
             var el = document.getElementById('debug_text');
             if (!el) return;
@@ -661,6 +676,8 @@
                     'goal moved: ' + moved + ' / ' + GOAL_MOVE_M + 'm',
                     'since route: ' + (last_route_ts ? Math.round((Date.now() - last_route_ts) / 1000) + 's' : '-'),
                     'api today: ' + ghReqCount(),
+                    'cache pos: ' + fmtCache(posCache),
+                    'cache pred: ' + fmtCache(predCache),
                     'status: ' + last_reroute_info
                 ];
                 el.innerHTML = rows.join('<br>');
@@ -729,7 +746,8 @@ let textbox_eta = L.Control.extend({
                 url: "aprs.php?indicativo=" + callsign,
                 type: "GET",
                 dataType: "json",
-                success: function (foo) {
+                success: function (foo, _st, xhr) {
+                   readCacheHeaders(xhr, posCache);
                    var $fecha = new Date();
                    $fecha.setTime(foo.entries[0].lasttime * 1000);
                    actualizaGlobo(
@@ -752,7 +770,7 @@ let textbox_eta = L.Control.extend({
                 url: "ttn.php?dev_id=" + encodeURIComponent(dev_id),
                 type: "GET",
                 dataType: "json",
-                success: function(data) { procesaTTN(dev_id, data); }
+                success: function(data, _st, xhr) { readCacheHeaders(xhr, posCache); procesaTTN(dev_id, data); }
             });
         };
 
@@ -893,11 +911,13 @@ let textbox_eta = L.Control.extend({
            } else if ( $("#bajando").prop('checked') || parseInt(position[2]) > parseInt($burst_alt) ) {
               $burst_alt = (parseInt(position[2])+1)
            }
-           $url = "https://api.v2.sondehub.org/tawhiri?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
+           // Cached server-side proxy for the SondeHub prediction (shared across clients).
+           $url = "predict.php?launch_latitude="+position[0]+"&launch_longitude="+wrapLng(position[1])+"&launch_datetime="+$fecha_sim+"&ascent_rate="+$ascent_rate+"&descent_rate="+$descent_rate+"&burst_altitude="+$burst_alt+"&launch_altitude="+position[2];
            try { map.removeLayer(asc_poly); map.removeLayer(des_poly); map.removeLayer(finish_marker); } catch (error) {};
            $.getJSON(
               $url,
-              function (data) {
+              function (data, _st, xhr) {
+                 readCacheHeaders(xhr, predCache);
                  var asc_points = data.prediction[0].trajectory.map(function(x) {
                     return [x.latitude, unWrapLng(x.longitude)];
                  });
