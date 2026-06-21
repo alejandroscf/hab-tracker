@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="leaflet/leaflet.css" />
     <script type="text/javascript" src="leaflet/leaflet.js"></script>
-    <script type="text/javascript" src="leafletembed.js"></script>
+    <script type="text/javascript" src="leafletembed.js?v=2"></script>
     <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
     <script
               src="https://code.jquery.com/jquery-3.3.1.min.js"
@@ -22,7 +22,7 @@
         }
         #map {
             position: absolute; top: 0; left: 0; right: 0;
-            bottom: 80px; /* room for quick bar */
+            bottom: 110px; /* room for the two-row quick bar; refined by JS to the real height */
         }
         /* Quick bar: always visible at bottom */
         #quick-bar {
@@ -112,7 +112,7 @@
             width: 90vw; max-width: 560px; box-sizing: border-box;
             background: rgba(255,255,255,0.55); padding: 10px 16px;
             border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
-            font-size: 14px; z-index: 999; pointer-events: none;
+            font-size: 14px; z-index: 1001; pointer-events: none;
         }
         #eta_text {
             background: rgba(255,255,255,0.55); padding: 8px 12px;
@@ -397,6 +397,17 @@
         recarga();
         initmap();
 
+        // Size the map to the actual quick-bar height (+2px gap) so the bottom-right
+        // attribution control clears the bar instead of hiding behind it.
+        function syncMapBottom() {
+            var bar = document.getElementById('quick-bar');
+            if (!bar) return;
+            document.getElementById('map').style.bottom = (bar.offsetHeight + 2) + 'px';
+            if (typeof map !== 'undefined' && map.invalidateSize) map.invalidateSize();
+        }
+        syncMapBottom();
+        window.addEventListener('resize', syncMapBottom);
+
         map.addControl(new L.Control.Fullscreen());
 
         var lc = L.control.locate({
@@ -515,6 +526,7 @@
             last_routed_dest = null;
             if (!activeDest()) {
                 try { map.removeLayer(track); } catch (e) {}
+                setRouteAttribution(false);
                 $('.eta_coche').text('');
                 last_reroute_info = 'no destination';
                 updateDebug();
@@ -571,6 +583,37 @@
             hideGhModal();
             ghSetKey('');   // no key → setRoutingEnabled(false) reverts to No calc + disables
         }
+
+        // ---- Attribution (Leaflet attribution control, bottom-right) ------
+        // OSM tile credit is added by the tile layer; here we swap the data-source
+        // credit with the active source and show the GraphHopper credit while a
+        // route is displayed. Guarded so they're safe before initmap() runs.
+        var APRS_ATTR = 'Posiciones: <a href="https://aprs.fi/" target="_blank" rel="noopener">aprs.fi</a>';
+        var TTN_ATTR  = 'Posiciones: <a href="https://www.thethingsnetwork.org/" target="_blank" rel="noopener">The Things Network</a>';
+        var GH_ATTR   = 'Ruta: <a href="https://www.graphhopper.com/" target="_blank" rel="noopener">GraphHopper</a>';
+        var dataAttr = APRS_ATTR, routeAttr = null;
+        // Build the data-source + route credits as one '|'-separated prefix. The OSM
+        // credit is contributed by the tile layer and Leaflet appends it after this
+        // prefix (joined with " | "), so the whole line stays '|'-separated with a
+        // single, layer-managed OSM entry.
+        function renderAttribution() {
+            if (typeof map === 'undefined' || !map.attributionControl) return;
+            var parts = [];
+            if (dataAttr) parts.push(dataAttr);
+            if (routeAttr) parts.push(routeAttr);
+            map.attributionControl.setPrefix(parts.join(' | '));
+        }
+        function setDataAttribution(kind) {            // 'aprs' | 'ttn' | null
+            dataAttr = kind === 'ttn' ? TTN_ATTR : kind === 'aprs' ? APRS_ATTR : null;
+            renderAttribution();
+        }
+        function setRouteAttribution(on) {
+            routeAttr = on ? GH_ATTR : null;
+            renderAttribution();
+        }
+        // Initial render — runs here, after the vars above are assigned (the early
+        // call right after initmap() executed before them, so it was a no-op).
+        setDataAttribution($("#indicativo").val().indexOf("TTN:") === 0 ? 'ttn' : 'aprs');
 
         // ---- Debug overlay (toggled from the drawer) ----------------------
         function debugOn() {
@@ -673,8 +716,10 @@ let textbox_eta = L.Control.extend({
         function recarga() {
             var val = $("#indicativo").val();
             if (val.indexOf("TTN:") === 0) {
+                setDataAttribution('ttn');
                 recarga_ttn(val.substring(4));
             } else {
+                setDataAttribution('aprs');
                 recarga_aprs(val);
             }
         };
@@ -801,6 +846,7 @@ let textbox_eta = L.Control.extend({
                    try { map.removeLayer(track); } catch(e) {}
                    track = omnivore.gpx.parse(gpx_track)
                    track.addTo(map);
+                   setRouteAttribution(true);
                    current_route_latlngs = [];
                    track.eachLayer(function(layer){
                       if (layer.getLatLngs) {
