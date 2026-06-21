@@ -136,6 +136,37 @@
             white-space: normal; overflow-wrap: anywhere;
             pointer-events: none; display: none;
         }
+        /* Disabled routing destinations (no GraphHopper key) */
+        .dest-group input[type=radio]:disabled + label {
+            opacity: 0.4; cursor: not-allowed;
+        }
+        /* GraphHopper key prompt */
+        #gh-backdrop {
+            display: none; position: fixed; inset: 0; z-index: 2999;
+            background: rgba(0,0,0,0.45);
+        }
+        #gh-backdrop.open { display: block; }
+        #gh-modal {
+            display: none; position: fixed; z-index: 3000;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90vw; max-width: 380px; box-sizing: border-box;
+            background: white; border-radius: 14px; padding: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        #gh-modal.open { display: block; }
+        #gh-modal h3 { margin: 0 0 8px; font-size: 17px; }
+        #gh-modal p { margin: 0 0 12px; font-size: 14px; color: #444; line-height: 1.4; }
+        #gh-modal a { color: #1a73e8; }
+        #gh-modal input {
+            width: 100%; box-sizing: border-box; padding: 10px; font-size: 15px;
+            border: 1px solid #ccc; border-radius: 8px; margin-bottom: 14px;
+        }
+        #gh-modal .gh-btns { display: flex; gap: 8px; }
+        #gh-modal button {
+            flex: 1; padding: 11px; font-size: 15px; border-radius: 8px; cursor: pointer;
+        }
+        #gh-modal .gh-save { border: none; background: #1a73e8; color: white; }
+        #gh-modal .gh-skip { border: 1px solid #ccc; background: #f5f5f5; color: #333; }
     </style>
 </head>
 <body>
@@ -151,6 +182,20 @@
 
     <!-- Debug overlay: toggled from the settings drawer -->
     <div id="debug_text"></div>
+
+    <!-- GraphHopper API key prompt (first use of routing) -->
+    <div id="gh-backdrop" onclick="skipGhModal()"></div>
+    <div id="gh-modal">
+        <h3>Clave de enrutado (GraphHopper)</h3>
+        <p>El cálculo de ruta usa GraphHopper. Introduce tu propia clave de API (gratis) para
+           activar el enrutado a 🎈 Globo y 🏁 Meta.
+           <a href="https://www.graphhopper.com/" target="_blank" rel="noopener">Consigue una clave gratis →</a></p>
+        <input id="gh_modal_key" type="text" placeholder="Pega aquí tu clave de GraphHopper" autocomplete="off">
+        <div class="gh-btns">
+            <button class="gh-skip" onclick="skipGhModal()">Continuar sin clave</button>
+            <button class="gh-save" onclick="saveGhFromModal()">Guardar</button>
+        </div>
+    </div>
 
     <!-- Quick bar: always visible -->
     <div id="quick-bar">
@@ -237,6 +282,12 @@
         <div class="param-row">
             <span>Fecha inicial</span>
             <input type="text" id="fecha_ini" name="fecha_ini" value="2026-06-20T09:00:00.000Z">
+        </div>
+
+        <h3>Enrutado (GraphHopper)</h3>
+        <div class="param-row">
+            <span>Clave de API &mdash; <a href="https://www.graphhopper.com/" target="_blank" rel="noopener">consíguela gratis</a></span>
+            <input type="text" id="gh_key" name="gh_key" placeholder="Tu clave de GraphHopper" autocomplete="off" onchange="ghSetKey(this.value)">
         </div>
 
         <h3>Track</h3>
@@ -419,6 +470,7 @@
             if (my_position === undefined) { last_reroute_info = 'no GPS'; updateDebug(); return; }
             var dest = activeDest();
             if (!dest) { last_reroute_info = 'no destination'; updateDebug(); return; }
+            if (!ghKey()) { last_reroute_info = 'no API key'; updateDebug(); return; }
             var sinceFloor = Date.now() - last_route_ts;
             if (!force && sinceFloor < ROUTE_FLOOR_MS) {
                 last_reroute_info = 'floor ' + Math.round((ROUTE_FLOOR_MS - sinceFloor) / 1000) + 's';
@@ -468,7 +520,56 @@
                 updateDebug();
                 return;
             }
+            if (!ghKey()) { showGhModal(); return; }   // ask for the key before routing
             maybeReroute(true);
+        }
+
+        // ---- GraphHopper API key (per-user, stored in this browser) -------
+        // Routing uses GraphHopper, called directly from the browser, so each
+        // user supplies their own key (spreads the daily quota per device).
+        function ghKey() {
+            return (localStorage.getItem('gh_api_key') || '').trim();
+        }
+        function ghSetKey(k) {
+            k = (k || '').trim();
+            try {
+                if (k) localStorage.setItem('gh_api_key', k);
+                else localStorage.removeItem('gh_api_key');
+            } catch (e) {}
+            var f = document.getElementById('gh_key');
+            if (f) f.value = k;
+            setRoutingEnabled(!!k);
+        }
+        // Without a key only "No calc" is selectable; disable the routing targets.
+        function setRoutingEnabled(on) {
+            ['dest_globo', 'dest_meta'].forEach(function (id) {
+                var r = document.getElementById(id);
+                if (r) r.disabled = !on;
+            });
+            if (!on) {
+                var nada = document.getElementById('dest_nada');
+                if (nada && !nada.checked) { nada.checked = true; forceRoute(); }
+            }
+        }
+        function showGhModal() {
+            var inp = document.getElementById('gh_modal_key');
+            if (inp) inp.value = ghKey();
+            document.getElementById('gh-backdrop').classList.add('open');
+            document.getElementById('gh-modal').classList.add('open');
+            if (inp) inp.focus();
+        }
+        function hideGhModal() {
+            document.getElementById('gh-backdrop').classList.remove('open');
+            document.getElementById('gh-modal').classList.remove('open');
+        }
+        function saveGhFromModal() {
+            ghSetKey(document.getElementById('gh_modal_key').value);
+            hideGhModal();
+            if (ghKey() && activeDest()) forceRoute();   // route now that we have a key
+        }
+        function skipGhModal() {
+            hideGhModal();
+            ghSetKey('');   // no key → setRoutingEnabled(false) reverts to No calc + disables
         }
 
         // ---- Debug overlay (toggled from the drawer) ----------------------
@@ -527,6 +628,16 @@
         }
         // Keep the timer/age fields fresh even between GPS/refresh events.
         setInterval(function () { if (debugOn()) updateDebug(); }, 1000);
+
+        // Initialise routing-key state: prefill the drawer field and gate the
+        // 🎈/🏁 radios on whether a GraphHopper key is stored in this browser.
+        (function () {
+            var f = document.getElementById('gh_key');
+            if (f) f.value = ghKey();
+            // Key present → ensure routing targets are enabled. No key → leave them
+            // enabled so the first 🎈/🏁 click opens the key popup; declining disables them.
+            if (ghKey()) setRoutingEnabled(true);
+        })();
 
 let textbox_eta = L.Control.extend({
             onAdd: function() {
@@ -676,6 +787,7 @@ let textbox_eta = L.Control.extend({
         };
 
         function llevame_dest(dest) {
+          if (!ghKey()) return;            // no key → no routing (also guarded upstream)
           if (my_position !== undefined) {
              if (xhr_llevame) { xhr_llevame.abort(); }
              var point1 = "" + my_position[0] + "," + my_position[1];
@@ -683,9 +795,7 @@ let textbox_eta = L.Control.extend({
              ghReqInc();   // count this GraphHopper request against today's quota
              xhr_llevame = $.ajax({
                 url: "https://graphhopper.com/api/1/route?point="+ point1,
-                // Previous key (quota-exhausted 2026-06; swap back here if needed):
-                // key: "a54c1ef8-63cb-42c5-817d-326e8aa31587"
-                data: {point: point2, type: "gpx", key: "f33b3dce-5c96-4104-99e0-7e6c1ed0bd0a"},
+                data: {point: point2, type: "gpx", key: ghKey()},
                 type: "GET",
                 success: function (gpx_track) {
                    try { map.removeLayer(track); } catch(e) {}
